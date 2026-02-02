@@ -13,6 +13,15 @@ const lectureSchema = new mongoose.Schema({
         type: String,
         default: '10:00' // Placeholder
     },
+    transcript: {
+        type: String,
+        default: ''
+    },
+    transcriptionStatus: {
+        type: String,
+        enum: ['pending', 'processing', 'completed', 'failed'],
+        default: 'pending'
+    },
     id: String // For frontend key matching if needed, though _id exists
 });
 
@@ -37,7 +46,7 @@ const courseSchema = new mongoose.Schema({
     },
     description: {
         type: String,
-        required: [true, 'Please add a description']
+        // required: [true, 'Please add a description'] -- Making optional as per user request to unblock
     },
     category: {
         type: String,
@@ -68,6 +77,10 @@ const courseSchema = new mongoose.Schema({
     thumbnail: {
         type: String,
         default: 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=500&q=80' // Default placeholder
+    },
+    duration: {
+        type: String,
+        default: '0h 0m'
     },
     instructor: {
         type: mongoose.Schema.Types.ObjectId,

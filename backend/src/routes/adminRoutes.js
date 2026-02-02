@@ -6,7 +6,9 @@ const {
     getAllTeachers,
     getAllStudents,
     getDashboardStats,
-    getAllCourses
+    getAllCourses,
+    deleteUser,
+    deleteCourse
 } = require('../controllers/adminController');
 
 router.use(protect);
@@ -17,5 +19,7 @@ router.get('/teachers', getAllTeachers);
 router.get('/students', getAllStudents);
 router.get('/stats', getDashboardStats);
 router.get('/courses', getAllCourses);
+router.delete('/users/:id', deleteUser);
+router.delete('/courses/:id', deleteCourse);
 
 module.exports = router;

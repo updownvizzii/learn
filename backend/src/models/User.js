@@ -52,12 +52,65 @@ const userSchema = new mongoose.Schema({
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Course'
     },
-    purchaseDate: Date
+    purchaseDate: Date,
+    completedLectures: [String],
+    isCompleted: {
+      type: Boolean,
+      default: false
+    },
+    completionDate: Date
   }],
   watchHistory: [{
     videoId: String,
     timestamp: Date
-  }]
+  }],
+
+  // Gamification fields
+  xp: {
+    type: Number,
+    default: 0
+  },
+  level: {
+    type: Number,
+    default: 1
+  },
+  streak: {
+    type: Number,
+    default: 0
+  },
+  bestStreak: {
+    type: Number,
+    default: 0
+  },
+  lastStreakDate: Date,
+  achievements: [{
+    achievementId: String,
+    title: String,
+    unlockedAt: {
+      type: Date,
+      default: Date.now
+    },
+    xpAwarded: Number
+  }],
+  badges: [{
+    badgeId: String,
+    name: String,
+    rarity: {
+      type: String,
+      enum: ['common', 'rare', 'epic', 'legendary'],
+      default: 'common'
+    },
+    earnedAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
+
+  // Activity tracking
+  lastActive: {
+    type: Date,
+    default: Date.now
+  }
 }, { timestamps: true });
 
 // Pre-save hook to hash password

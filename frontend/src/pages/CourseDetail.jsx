@@ -16,15 +16,26 @@ import {
     MessageCircle,
     Share2,
     Heart,
-    Loader2
+    Video,
+    BookOpen,
+    ArrowLeft,
+    Loader2,
+    FileText
 } from 'lucide-react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
+
 
 const API_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
+import { generateEnhancedCertificate } from '../components/CertificateGenerator';
+import { useAuth } from '../contexts/AuthContext';
+import { useGamification } from '../components/GamificationProvider';
+
 const CourseDetail = () => {
     const { id } = useParams();
+    const { user } = useAuth();
+    const { handleGamificationResult } = useGamification();
     const navigate = useNavigate();
     const [course, setCourse] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -32,30 +43,33 @@ const CourseDetail = () => {
     const [isEnrolling, setIsEnrolling] = useState(false);
     const [activeTab, setActiveTab] = useState('overview');
     const [openSection, setOpenSection] = useState(0);
+    const [completedLectures, setCompletedLectures] = useState([]);
+    const [isCourseCompleted, setIsCourseCompleted] = useState(false);
+    const [currentLecture, setCurrentLecture] = useState(null);
+    const [showCaptions, setShowCaptions] = useState(true);
 
     useEffect(() => {
         const fetchCourseData = async () => {
             try {
                 setLoading(true);
                 const token = localStorage.getItem('accessToken');
-
-                // Fetch course details
                 const courseRes = await axios.get(`${API_URL}/courses/${id}`);
                 setCourse(courseRes.data);
 
-                // Check enrollment if logged in
                 if (token) {
                     try {
                         const enrolledRes = await axios.get(`${API_URL}/courses/enrolled`);
                         const enrolledCourses = enrolledRes.data;
                         if (Array.isArray(enrolledCourses)) {
-                            setIsEnrolled(enrolledCourses.some(c => c._id === id));
+                            const enrollment = enrolledCourses.find(c => c._id === id);
+                            if (enrollment) {
+                                setIsEnrolled(true);
+                                setCompletedLectures(enrollment.completedLectures || []);
+                                setIsCourseCompleted(enrollment.isCompleted || false);
+                            }
                         }
                     } catch (err) {
-                        if (err.response?.status === 401) {
-                            // Session expired, just treat as not enrolled
-                            setIsEnrolled(false);
-                        }
+                        if (err.response?.status === 401) setIsEnrolled(false);
                     }
                 }
             } catch (error) {
@@ -68,58 +82,74 @@ const CourseDetail = () => {
     }, [id]);
 
     const handleEnroll = async () => {
-        if (isEnrolled) {
-            alert('You are already enrolled in this course.');
-            return;
-        }
-
+        if (isEnrolled) return;
         setIsEnrolling(true);
         try {
             const token = localStorage.getItem('accessToken');
             if (!token) {
-                alert('Please login to enroll in this course.');
                 navigate('/login');
                 return;
             }
-
             const response = await axios.post(`${API_URL}/courses/${id}/enroll`);
             if (response.status === 200 || response.status === 201) {
                 setIsEnrolled(true);
-                alert('🎉 Successfully enrolled! You can now access all course videos.');
-                // Refresh the page to show unlocked content
-                window.scrollTo({ top: 0, behavior: 'smooth' });
+                window.location.reload();
             }
         } catch (error) {
             console.error('Enrollment error:', error);
-            const message = error.response?.data?.message || 'Enrollment failed. Please try again.';
-            alert(message);
         } finally {
             setIsEnrolling(false);
         }
     };
 
+
     const handleVideoClick = async (e, lec, isEnrolled) => {
         if (!isEnrolled) {
             e.preventDefault();
-            alert('Please enroll in this course to access the videos.');
             return;
         }
-
-        // For Cloudflare Stream videos (UIDs), fetch playback URL
-        if (lec.video && !lec.video.startsWith('http')) {
+        if (lec.video) {
             e.preventDefault();
-            try {
-                // Show loading state if needed
-                const response = await axios.get(`${API_URL}/courses/${id}/video/${lec.video}`);
-                const { iframeUrl } = response.data;
-                // Open video in new window with Cloudflare Stream player
-                window.open(iframeUrl, '_blank', 'width=1280,height=720');
-            } catch (error) {
-                console.error('Error fetching video:', error);
-                alert('Failed to load video. Please try again.');
-            }
+            setSelectedLecture(lec);
+            // Scroll to top to show video player
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
-        // If it's a direct URL (shouldn't happen with new uploads but for legacy/external), let default behavior handle it
+    };
+
+    const toggleLectureCompletion = async (lectureId) => {
+        try {
+            const token = localStorage.getItem('accessToken');
+            const response = await axios.post(`${API_URL}/courses/${id}/lectures/${lectureId}/complete`, {}, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (response.data.success) {
+                setCompletedLectures(response.data.completedLectures);
+                setIsCourseCompleted(response.data.isCompleted);
+
+                // Handle Gamification Result
+                if (response.data.gamification) {
+                    const { lectureXP, courseXP, achievement } = response.data.gamification;
+                    if (lectureXP) handleGamificationResult(lectureXP);
+                    if (courseXP) handleGamificationResult(courseXP);
+                    if (achievement) handleGamificationResult({ achievement });
+                }
+            }
+        } catch (error) {
+            console.error("Error marking lecture as complete:", error);
+        }
+    };
+
+    const downloadCertificate = async () => {
+        try {
+            const token = localStorage.getItem('accessToken');
+            const res = await axios.get(`${API_URL}/courses/${id}/certificate`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            await generateEnhancedCertificate(res.data);
+        } catch (error) {
+            console.error("Error generating certificate:", error);
+        }
     };
 
     const toggleSection = (index) => {
@@ -128,356 +158,406 @@ const CourseDetail = () => {
 
     if (loading) {
         return (
-            <div className="min-h-screen flex flex-col items-center justify-center bg-[#f8fafc]">
-                <Loader2 className="h-12 w-12 text-indigo-600 animate-spin mb-4" />
-                <p className="text-gray-500 font-medium">Loading course details...</p>
+            <div className="min-h-screen flex flex-col items-center justify-center bg-brand-bg transition-colors">
+                <Loader2 className="h-16 w-16 text-brand-primary animate-spin mb-8" />
+                <p className="text-brand-muted font-black uppercase tracking-[0.4em] text-[10px]">Syncing Intelligence...</p>
             </div>
         );
     }
 
     if (!course) {
         return (
-            <div className="min-h-screen flex flex-col items-center justify-center bg-[#f8fafc]">
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">Course not found</h2>
-                <p className="text-gray-500 mb-6">The course you're looking for doesn't exist or has been removed.</p>
-                <button onClick={() => navigate('/courses')} className="px-6 py-2 bg-indigo-600 text-white rounded-lg font-bold">Browse Other Courses</button>
+            <div className="min-h-screen flex flex-col items-center justify-center bg-brand-bg transition-colors">
+                <h2 className="text-3xl font-black text-brand-text italic tracking-tighter uppercase mb-6 transition-colors">Sector Lost</h2>
+                <button onClick={() => navigate('/courses')} className="px-10 py-4 bg-brand-primary text-white text-[10px] font-black uppercase tracking-widest rounded-2xl hover:bg-brand-primary/90 transition-all shadow-premium">Return to Grid</button>
             </div>
         );
     }
 
-    // Features fallback (if missing in DB)
-    const features = course.features || [
-        'Full lifetime access',
-        'Access on mobile and TV',
-        'Certificate of completion',
-        '10+ downloadable resources'
-    ];
+    const features = course.features || ['Elite Clearance', 'Sync Across Devices', 'Verified Status', 'Resource Downlink'];
 
     return (
-        <div className="min-h-screen bg-[#f8fafc] font-sans text-gray-900 pb-20">
-            {/* Background Blobs */}
-            <div className="fixed top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
-                <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-purple-200/30 rounded-full blur-[120px]" />
-                <div className="absolute top-[20%] right-[-10%] w-[40%] h-[40%] bg-indigo-200/30 rounded-full blur-[120px]" />
+        <div className="min-h-screen bg-brand-bg font-jakarta text-brand-text relative overflow-hidden transition-colors">
+            {/* Background Decor */}
+            <div className="fixed inset-0 pointer-events-none z-0">
+                <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-brand-primary/5 dark:bg-blue-600/10 rounded-full blur-[150px]" />
+                <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-brand-secondary/5 dark:bg-blue-900/5 rounded-full blur-[120px]" />
             </div>
 
-            {/* Navbar */}
-            <nav className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-md border-b border-gray-100 px-6 py-4 flex items-center justify-between">
-                <button onClick={() => navigate('/courses')} className="text-gray-600 hover:text-indigo-600 font-medium flex items-center gap-2 transition-colors">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5" /><path d="M12 19l-7-7 7-7" /></svg>
-                    Back to Courses
-                </button>
-                <div className="flex gap-4">
-                    <button className="p-2 text-gray-500 hover:text-red-500 transition-colors"><Heart className="w-5 h-5" /></button>
-                    <button className="p-2 text-gray-500 hover:text-indigo-600 transition-colors"><Share2 className="w-5 h-5" /></button>
+            {/* Navigation */}
+            <nav className="fixed top-0 w-full z-50 bg-brand-surface/60 backdrop-blur-2xl border-b border-brand-border px-10 h-24 flex items-center justify-between transition-colors">
+                <div className="flex items-center gap-6">
+                    <Link to="/courses" className="p-3 bg-brand-surface border border-brand-border rounded-xl hover:text-brand-primary hover:border-brand-primary/50 transition-all text-brand-muted">
+                        <ArrowLeft className="w-5 h-5" />
+                    </Link>
+                    <div>
+                        <h1 className="text-xl font-black text-brand-text italic tracking-tighter uppercase transition-colors">INTEL_STREAM</h1>
+                        <p className="text-[10px] font-black text-brand-muted uppercase tracking-widest transition-colors">Session: Active</p>
+                    </div>
+                </div>
+                <div className="flex gap-8 items-center">
+                    <button className="text-brand-muted hover:text-brand-primary transition-colors"><Heart className="w-5 h-5" /></button>
+                    <button className="text-brand-muted hover:text-brand-primary transition-colors"><Share2 className="w-5 h-5" /></button>
+
+                    {user ? (
+                        <div
+                            onClick={() => navigate(user.role === 'teacher' ? '/teacher/dashboard' : '/student/dashboard')}
+                            className="w-10 h-10 rounded-xl overflow-hidden border border-brand-border bg-brand-bg hover:border-brand-primary/40 transition-all cursor-pointer"
+                        >
+                            <img src={user.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.username}`} alt="Profile" className="w-full h-full object-cover" />
+                        </div>
+                    ) : (
+                        <button onClick={() => navigate('/login')} className="px-6 py-2.5 text-[10px] font-black uppercase tracking-widest bg-brand-primary text-white rounded-xl hover:bg-brand-primary/80 transition-all shadow-premium">Join Grid</button>
+                    )}
+                    <div className="hidden lg:flex items-center gap-6">
+                        <div className="text-right">
+                            <p className="text-[10px] font-black text-brand-muted uppercase tracking-widest">Current Operator</p>
+                            <p className="text-xs font-black text-brand-primary uppercase italic tracking-tighter transition-colors">Verified Student</p>
+                        </div>
+                        <div className="h-12 w-12 rounded-2xl bg-brand-primary/10 border border-brand-primary/20 flex items-center justify-center text-brand-primary font-black shadow-premium transition-all">
+                            S
+                        </div>
+                    </div>
                 </div>
             </nav>
 
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 relative z-10">
-
-                {/* Hero Section */}
-                <div className="flex flex-col lg:flex-row gap-8 lg:gap-12 items-start mb-12">
-                    <div className="flex-1 space-y-6">
-                        <div className="flex items-center space-x-2 text-sm font-bold tracking-wide text-indigo-600 uppercase bg-indigo-50 px-3 py-1 rounded-full w-fit">
-                            <span>{course.category}</span>
-                        </div>
-
-                        <h1 className="text-4xl md:text-5xl font-extrabold pb-2 bg-clip-text text-transparent bg-gradient-to-r from-gray-900 via-indigo-900 to-gray-900 leading-tight">
-                            {course.title}
-                        </h1>
-
-                        {course.subtitle && (
-                            <p className="text-xl text-gray-700 font-medium leading-relaxed">
-                                {course.subtitle}
-                            </p>
-                        )}
-
-                        <p className="text-lg text-gray-600 leading-relaxed max-w-2xl">
-                            {course.description}
-                        </p>
-
-                        <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
-                            <div className="flex items-center bg-yellow-50 px-2 py-1 rounded-lg border border-yellow-100">
-                                <span className="font-bold text-yellow-600 mr-1">{course.rating || '0'}</span>
-                                <div className="flex text-yellow-400">
-                                    {[...Array(5)].map((_, i) => (
-                                        <Star key={i} className={`w-4 h-4 ${i < (course.rating || 0) ? 'fill-current' : ''}`} />
-                                    ))}
-                                </div>
-                                <span className="ml-2 text-gray-500">({(course.numReviews || 0).toLocaleString()})</span>
-                            </div>
-                            <span className="flex items-center gap-1"><Users className="w-4 h-4 text-indigo-500" /> {(course.students?.length || 0).toLocaleString()} students</span>
-                            <span className="flex items-center gap-1"><Calendar className="w-4 h-4 text-indigo-500" /> Last updated {new Date(course.updatedAt).toLocaleDateString()}</span>
-                            <span className="flex items-center gap-1"><Globe className="w-4 h-4 text-indigo-500" /> {course.language || 'English'}</span>
-                        </div>
-
-                        <div className="flex items-center gap-3 p-4 bg-white/60 backdrop-blur rounded-2xl border border-gray-100 w-fit">
-                            <img
-                                src={course.instructor?.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${course.instructor?.username}`}
-                                alt={course.instructor?.username}
-                                className="w-12 h-12 rounded-full ring-2 ring-indigo-100"
-                                onError={(e) => { e.target.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${course.instructor?.username}`; }}
-                            />
-                            <div>
-                                <p className="text-sm text-gray-500">Created by</p>
-                                <span className="font-bold text-indigo-600">{course.instructor?.username || 'Unknown Instructor'}</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="hidden lg:block w-[400px] flex-shrink-0">
-                        {/* Placeholder for sticky space */}
-                    </div>
-                </div>
-
-                <div className="flex flex-col lg:flex-row gap-12">
-                    <div className="flex-1">
-                        {/* Mobile Video Preview */}
-                        <div className="block lg:hidden mb-8">
-                            <div className="aspect-video bg-gray-900 rounded-2xl overflow-hidden shadow-2xl relative group cursor-pointer">
-                                <img
-                                    src={course.thumbnail ? (course.thumbnail.startsWith('http') ? course.thumbnail : `${API_URL.replace('/api', '')}${course.thumbnail}`) : 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=1200&q=80'}
-                                    className="w-full h-full object-cover opacity-60 group-hover:opacity-75 transition-opacity"
-                                    alt="Course Preview"
-                                    onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=1200&q=80'; }}
-                                />
-                                <div className="absolute inset-0 flex items-center justify-center">
-                                    <div className="w-16 h-16 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center text-white">
-                                        <Play className="w-8 h-8 fill-current" />
+            <main className="max-w-7xl mx-auto px-6 pt-32 pb-20 relative z-10">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
+                    {/* Left Side: Video Content */}
+                    <div className="lg:col-span-8 space-y-10">
+                        {/* Video Player Section */}
+                        <div className="aspect-video bg-brand-surface rounded-[2.5rem] border border-brand-border overflow-hidden shadow-premium dark:shadow-premium-dark relative group transition-all">
+                            {currentLecture ? (
+                                <div className="w-full h-full relative">
+                                    <video
+                                        key={currentLecture.video}
+                                        src={currentLecture.video}
+                                        className="w-full h-full object-cover"
+                                        controls
+                                        autoPlay
+                                    />
+                                    <div className="absolute top-8 left-8">
+                                        <div className="px-5 py-2.5 bg-brand-primary/20 backdrop-blur-xl border border-brand-primary/30 rounded-2xl">
+                                            <p className="text-[10px] font-black text-brand-primary uppercase tracking-[0.2em] transition-colors">{currentLecture.title}</p>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
+                            ) : (
+                                <div className="w-full h-full flex flex-col items-center justify-center space-y-6">
+                                    <div className="w-20 h-20 rounded-3xl bg-brand-primary/10 flex items-center justify-center text-brand-primary">
+                                        <Video className="w-10 h-10" />
+                                    </div>
+                                    <p className="text-brand-muted font-black uppercase tracking-widest text-xs">Awaiting Command Input</p>
+                                </div>
+                            )}
                         </div>
 
+                        {/* Current Lecture Info */}
+                        <div className="bg-brand-surface rounded-[2.5rem] border border-brand-border p-10 shadow-premium transition-all">
+                            <div className="flex items-center justify-between mb-8">
+                                <h1 className="text-3xl font-black text-brand-text italic tracking-tighter uppercase transition-colors">
+                                    {currentLecture?.title || course.title}
+                                </h1>
+                                <div className="flex items-center gap-3 px-4 py-2 bg-brand-primary/10 rounded-xl border border-brand-primary/20 text-brand-primary">
+                                    <Clock className="w-4 h-4" />
+                                    <span className="text-xs font-black uppercase tracking-widest">{currentLecture?.duration || '10:00'}</span>
+                                </div>
+                            </div>
+                            <p className="text-brand-muted leading-relaxed font-bold transition-colors">
+                                {course.description}
+                            </p>
+                        </div>
                         {/* Tabs */}
-                        <div className="sticky top-[72px] bg-[#f8fafc]/90 backdrop-blur z-20 pt-2 border-b border-gray-200">
-                            <nav className="-mb-px flex space-x-8">
+                        <div className="sticky top-24 bg-brand-bg/80 backdrop-blur-2xl z-20 pt-4 border-b border-brand-border mb-12 transition-colors">
+                            <nav className="flex space-x-12">
                                 {['Overview', 'Curriculum', 'Instructor'].map((tab) => (
                                     <button
                                         key={tab}
                                         onClick={() => setActiveTab(tab.toLowerCase())}
                                         className={`
-                                            whitespace-nowrap py-4 px-1 border-b-2 font-bold text-sm transition-all
+                                            whitespace-nowrap py-6 font-black text-[11px] uppercase tracking-[0.3em] transition-all relative
                                             ${activeTab === tab.toLowerCase()
-                                                ? 'border-indigo-600 text-indigo-600'
-                                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}
+                                                ? 'text-brand-primary'
+                                                : 'text-brand-muted hover:text-brand-text'}
                                         `}
                                     >
                                         {tab}
+                                        {activeTab === tab.toLowerCase() && (
+                                            <motion.div layoutId="activeTab" className="absolute bottom-0 left-0 right-0 h-1 bg-brand-primary shadow-premium" />
+                                        )}
                                     </button>
                                 ))}
                             </nav>
                         </div>
 
                         {/* Tab Content */}
-                        <div className="py-8 space-y-10 min-h-[500px]">
-                            {activeTab === 'overview' && (
-                                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
-                                    <div className="bg-white rounded-3xl p-8 shadow-sm border border-gray-100">
-                                        <h3 className="text-2xl font-bold text-gray-900 mb-6">What you'll learn</h3>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            {(course.learningObjectives?.length > 0 ? course.learningObjectives : ['Master the fundamentals', 'Build real-world projects', 'Learn industry best practices']).map((item, i) => (
-                                                <div key={i} className="flex items-start gap-3">
-                                                    <CheckCircle className="h-5 w-5 text-emerald-500 flex-shrink-0 mt-0.5" />
-                                                    <span className="text-gray-700 font-medium">{item}</span>
+                        <div className="min-h-[600px]">
+                            <AnimatePresence mode="wait">
+                                {activeTab === 'overview' && (
+                                    <motion.div key="overview" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-12">
+                                        <div className="bg-brand-surface rounded-[2.5rem] p-10 border border-brand-border shadow-2xl relative overflow-hidden group transition-all">
+                                            <div className="absolute top-0 right-0 w-32 h-32 bg-brand-primary/5 blur-[50px] group-hover:bg-brand-primary/10 transition-all" />
+                                            <h3 className="text-2xl font-black text-brand-text mb-8 uppercase italic tracking-tighter">Strategic Objectives</h3>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                {(course.learningObjectives?.length > 0 ? course.learningObjectives : ['Establish high-level protocol mastery', 'Execute complex domain shifts', 'Secure verified expertise status']).map((item, i) => (
+                                                    <div key={i} className="flex items-start gap-4">
+                                                        <CheckCircle className="h-5 w-5 text-brand-primary flex-shrink-0 mt-1" />
+                                                        <span className="text-brand-muted font-bold text-sm leading-relaxed uppercase tracking-tight">{item}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                            {course.requirements?.length > 0 && (
+                                                <div className="bg-brand-surface rounded-[2rem] p-10 border border-brand-border transition-all">
+                                                    <h3 className="text-xl font-black text-brand-text mb-6 uppercase italic">Entry Prerequisites</h3>
+                                                    <ul className="space-y-4">
+                                                        {course.requirements.map((req, i) => (
+                                                            <li key={i} className="flex items-center gap-3 text-brand-muted font-bold text-xs uppercase tracking-tight">
+                                                                <div className="w-1.5 h-1.5 rounded-full bg-brand-primary" />
+                                                                {req}
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                </div>
+                                            )}
+                                            {course.targetAudience?.length > 0 && (
+                                                <div className="bg-brand-surface rounded-[2rem] p-10 border border-brand-border">
+                                                    <h3 className="text-xl font-black text-brand-text mb-6 uppercase italic">Intended Operators</h3>
+                                                    <ul className="space-y-4">
+                                                        {course.targetAudience.map((audience, i) => (
+                                                            <li key={i} className="flex items-center gap-3 text-brand-muted font-bold text-xs uppercase tracking-tight">
+                                                                <div className="w-1.5 h-1.5 rounded-full bg-brand-primary" />
+                                                                {audience}
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div className="bg-brand-surface rounded-[2.5rem] p-10 border border-brand-border transition-all">
+                                            <h3 className="text-2xl font-black text-brand-text mb-6 uppercase italic tracking-tighter">Intel Abstract</h3>
+                                            <div className="text-brand-muted font-medium text-lg leading-relaxed whitespace-pre-line">
+                                                {course.description}
+                                            </div>
+                                        </div>
+                                    </motion.div>
+                                )}
+
+                                {activeTab === 'curriculum' && (
+                                    <motion.div key="curriculum" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-8">
+                                        <div className="flex justify-between items-end mb-8">
+                                            <div>
+                                                <h3 className="text-3xl font-black text-brand-text uppercase italic tracking-tighter">Operational Map</h3>
+                                                <p className="text-brand-muted text-[10px] font-black uppercase tracking-[0.2em] mt-2">
+                                                    {course.sections?.length || 0} SECTORS • {course.sections?.reduce((acc, curr) => acc + (curr.lectures?.length || 0), 0) || 0} DEPLOYMENTS
+                                                </p>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-brand-primary font-black text-[10px] uppercase tracking-widest mb-1">Clearance Progress</p>
+                                                <div className="flex items-center gap-4">
+                                                    <div className="w-48 h-1.5 bg-brand-border rounded-full overflow-hidden">
+                                                        <motion.div
+                                                            initial={{ width: 0 }}
+                                                            animate={{ width: `${Math.round((completedLectures.length / Math.max(1, course.sections?.reduce((a, c) => a + (c.lectures?.length || 0), 0))) * 100)}%` }}
+                                                            className="h-full bg-brand-primary shadow-premium"
+                                                        />
+                                                    </div>
+                                                    <span className="text-brand-text font-black text-sm">{Math.round((completedLectures.length / Math.max(1, course.sections?.reduce((a, c) => a + (c.lectures?.length || 0), 0))) * 100)}%</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-6">
+                                            {course.sections?.map((section, idx) => (
+                                                <div key={idx} className="bg-brand-surface rounded-[2rem] border border-brand-border overflow-hidden group">
+                                                    <div
+                                                        className="flex items-center justify-between p-8 cursor-pointer hover:bg-brand-bg transition-colors"
+                                                        onClick={() => toggleSection(idx)}
+                                                    >
+                                                        <div className="flex items-center gap-6">
+                                                            <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-black text-sm border ${openSection === idx ? 'bg-brand-primary border-brand-primary text-white shadow-premium' : 'bg-brand-bg border-brand-border text-brand-muted'}`}>
+                                                                {idx + 1}
+                                                            </div>
+                                                            <h3 className="font-black text-xl text-brand-text uppercase italic tracking-tight">{section.title}</h3>
+                                                        </div>
+                                                        {openSection === idx ? <ChevronUp className="w-5 h-5 text-brand-muted" /> : <ChevronDown className="w-5 h-5 text-brand-muted" />}
+                                                    </div>
+
+                                                    <AnimatePresence>
+                                                        {openSection === idx && (
+                                                            <motion.div
+                                                                initial={{ height: 0 }}
+                                                                animate={{ height: 'auto' }}
+                                                                exit={{ height: 0 }}
+                                                                className="border-t border-brand-border px-8 pb-8 pt-4 space-y-3"
+                                                            >
+                                                                {section.lectures?.map((lec, lIdx) => {
+                                                                    const lectureId = lec._id;
+                                                                    const isCompleted = completedLectures.includes(lectureId);
+
+                                                                    return (
+                                                                        <div key={lIdx} className="bg-brand-bg p-5 rounded-2xl border border-brand-border flex items-center justify-between group/lec hover:border-brand-primary/30 transition-all">
+                                                                            <div className="flex items-center gap-5 flex-1">
+                                                                                <button
+                                                                                    onClick={() => isEnrolled && toggleLectureCompletion(lectureId)}
+                                                                                    className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${isCompleted ? 'bg-brand-primary border-brand-primary text-white shadow-premium' : 'border-brand-border text-transparent hover:border-brand-primary/50'}`}
+                                                                                >
+                                                                                    <CheckCircle className="w-4 h-4" />
+                                                                                </button>
+
+                                                                                <div
+                                                                                    className="flex-1 cursor-pointer"
+                                                                                    onClick={(e) => setCurrentLecture(lec)}
+                                                                                >
+                                                                                    <h4 className={`font-bold text-brand-text uppercase tracking-tight group-hover/lec:text-brand-primary transition-colors text-sm ${!isEnrolled && 'opacity-40'}`}>{lec.title}</h4>
+                                                                                    <div className="flex items-center gap-3 text-[9px] font-black uppercase tracking-widest text-brand-muted mt-2">
+                                                                                        {lec.video ? <Play className="w-3 h-3 text-brand-primary" /> : <Lock className="w-3 h-3" />}
+                                                                                        <span>{lec.duration || 'SECURE DATA'}</span>
+                                                                                        {lec.transcriptionStatus === 'completed' && (
+                                                                                            <span className="flex items-center gap-1 text-emerald-500">
+                                                                                                <FileText className="w-3 h-3" />
+                                                                                                TRANSCRIBED
+                                                                                            </span>
+                                                                                        )}
+                                                                                    </div>
+
+                                                                                    {/* Show transcript if available */}
+                                                                                    {isEnrolled && lec.transcript && (
+                                                                                        <div className="mt-3 p-3 bg-brand-bg/50 rounded-lg border border-emerald-500/20">
+                                                                                            <div className="flex items-center gap-2 mb-2">
+                                                                                                <FileText className="w-4 h-4 text-emerald-500" />
+                                                                                                <span className="text-emerald-500 font-bold text-xs uppercase">Transcript</span>
+                                                                                            </div>
+                                                                                            <p className="text-brand-muted text-xs leading-relaxed max-h-32 overflow-y-auto">
+                                                                                                {lec.transcript}
+                                                                                            </p>
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
+                                                                            </div>
+
+                                                                            {isEnrolled && lec.video && (
+                                                                                <button
+                                                                                    onClick={(e) => setCurrentLecture(lec)}
+                                                                                    className="px-5 py-2.5 bg-brand-primary/10 border border-brand-primary/20 text-brand-primary text-[9px] font-black uppercase tracking-widest rounded-xl hover:bg-brand-primary hover:text-white transition-all opacity-0 group-hover/lec:opacity-100"
+                                                                                >
+                                                                                    Initiate
+                                                                                </button>
+                                                                            )}
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </motion.div>
+                                                        )}
+                                                    </AnimatePresence>
                                                 </div>
                                             ))}
                                         </div>
-                                    </div>
+                                    </motion.div>
+                                )}
 
-                                    {course.requirements?.length > 0 && (
-                                        <div className="bg-white rounded-3xl p-8 shadow-sm border border-gray-100">
-                                            <h3 className="text-2xl font-bold text-gray-900 mb-6">Requirements</h3>
-                                            <ul className="list-disc list-inside space-y-2 text-gray-700 font-medium">
-                                                {course.requirements.map((req, i) => (
-                                                    <li key={i}>{req}</li>
-                                                ))}
-                                            </ul>
-                                        </div>
-                                    )}
-
-                                    {course.targetAudience?.length > 0 && (
-                                        <div className="bg-white rounded-3xl p-8 shadow-sm border border-gray-100">
-                                            <h3 className="text-2xl font-bold text-gray-900 mb-6">Who this course is for:</h3>
-                                            <ul className="list-disc list-inside space-y-2 text-gray-700 font-medium">
-                                                {course.targetAudience.map((audience, i) => (
-                                                    <li key={i}>{audience}</li>
-                                                ))}
-                                            </ul>
-                                        </div>
-                                    )}
-
-                                    <div className="bg-white rounded-3xl p-8 shadow-sm border border-gray-100">
-                                        <h3 className="text-2xl font-bold text-gray-900 mb-4">Description</h3>
-                                        <div className="prose prose-indigo text-gray-600 max-w-none">
-                                            <p>{course.description}</p>
-                                        </div>
-                                    </div>
-                                </motion.div>
-                            )}
-
-                            {activeTab === 'curriculum' && (
-                                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
-                                    <div className="flex justify-between items-center mb-4 text-gray-600 font-medium">
-                                        <p>
-                                            {course.sections?.length || 0} sections • {course.sections?.reduce((acc, curr) => acc + (curr.lectures?.length || 0), 0) || 0} lectures
-                                        </p>
-                                    </div>
-
-                                    {course.sections?.map((section, idx) => (
-                                        <div key={idx} className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
-                                            <button
-                                                onClick={() => toggleSection(idx)}
-                                                className="w-full bg-gray-50/50 px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
-                                            >
-                                                <div className="flex items-center gap-4 text-left">
-                                                    {openSection === idx ? <ChevronUp className="w-5 h-5 text-gray-500" /> : <ChevronDown className="w-5 h-5 text-gray-500" />}
-                                                    <span className="font-bold text-gray-900 text-lg">{section.title}</span>
+                                {activeTab === 'instructor' && (
+                                    <motion.div key="instructor" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="bg-brand-surface rounded-[2.5rem] p-12 border border-brand-border shadow-2xl relative overflow-hidden transition-all">
+                                        <div className="flex flex-col md:flex-row items-center md:items-start gap-12">
+                                            <div className="relative">
+                                                <img
+                                                    src={course.instructor?.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${course.instructor?.username}`}
+                                                    alt={course.instructor?.username}
+                                                    className="w-40 h-40 rounded-3xl border border-brand-border shadow-2xl"
+                                                />
+                                                <div className="absolute -bottom-4 -right-4 w-12 h-12 bg-brand-primary rounded-2xl flex items-center justify-center border-4 border-brand-surface">
+                                                    <Award className="w-6 h-6 text-white" />
                                                 </div>
-                                                <span className="text-sm text-gray-500 font-medium whitespace-nowrap">{section.lectures?.length || 0} lectures</span>
-                                            </button>
-
-                                            <AnimatePresence>
-                                                {openSection === idx && (
-                                                    <motion.div
-                                                        initial={{ opacity: 0, height: 0 }}
-                                                        animate={{ opacity: 1, height: 'auto' }}
-                                                        exit={{ opacity: 0, height: 0 }}
-                                                        className="overflow-hidden"
-                                                    >
-                                                        <div className="divide-y divide-gray-100 border-t border-gray-100">
-                                                            {section.lectures?.map((lec, lIdx) => (
-                                                                <div key={lIdx} className="px-6 py-4 flex items-center justify-between hover:bg-indigo-50/30 transition-colors group">
-                                                                    <div className="flex items-center gap-3 flex-1">
-                                                                        {isEnrolled ? (
-                                                                            <Play className="h-4 w-4 text-indigo-500 fill-current flex-shrink-0" />
-                                                                        ) : (
-                                                                            <Lock className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                                                                        )}
-                                                                        <button
-                                                                            onClick={(e) => handleVideoClick(e, lec, isEnrolled)}
-                                                                            className={`text-gray-700 font-medium group-hover:text-indigo-600 transition-colors flex-1 text-left ${isEnrolled ? 'cursor-pointer hover:underline' : 'cursor-not-allowed opacity-60'
-                                                                                }`}
-                                                                            disabled={!isEnrolled}
-                                                                        >
-                                                                            {lec.title}
-                                                                            {isEnrolled && (
-                                                                                <span className="ml-2 text-xs text-emerald-600 font-bold">▶ Watch Now</span>
-                                                                            )}
-                                                                        </button>
-                                                                    </div>
-                                                                    <span className="text-sm text-gray-400">{lec.duration || 'Video'}</span>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    </motion.div>
-                                                )}
-                                            </AnimatePresence>
-                                        </div>
-                                    ))}
-                                </motion.div>
-                            )}
-
-                            {activeTab === 'instructor' && (
-                                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-3xl p-8 shadow-sm border border-gray-100">
-                                    <div className="flex flex-col md:flex-row items-center md:items-start gap-8">
-                                        <img
-                                            src={course.instructor?.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${course.instructor?.username}`}
-                                            alt={course.instructor?.username}
-                                            className="w-32 h-32 rounded-full border-4 border-white shadow-lg"
-                                            onError={(e) => { e.target.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${course.instructor?.username}`; }}
-                                        />
-                                        <div className="flex-1 space-y-4 text-center md:text-left">
-                                            <div>
-                                                <h3 className="text-2xl font-bold text-gray-900">{course.instructor?.username || 'Unknown Instructor'}</h3>
-                                                <p className="text-indigo-600 font-bold">{course.instructor?.expertise || 'Course Instructor'}</p>
                                             </div>
-                                            <div className="flex flex-wrap justify-center md:justify-start gap-6 text-sm text-gray-500 font-bold">
-                                                <div className="flex items-center gap-2"><Star className="w-4 h-4 text-yellow-500" /> 4.8 Instructor Rating</div>
-                                                <div className="flex items-center gap-2"><MessageCircle className="w-4 h-4 text-indigo-500" /> 2,456 Reviews</div>
-                                                <div className="flex items-center gap-2"><Users className="w-4 h-4 text-emerald-500" /> {(course.students?.length || 0).toLocaleString()} Students</div>
-                                                <div className="flex items-center gap-2"><Play className="w-4 h-4 text-purple-500" /> 12 Courses</div>
+                                            <div className="flex-1 space-y-6 text-center md:text-left">
+                                                <div>
+                                                    <h3 className="text-3xl font-black text-brand-text uppercase italic tracking-tighter">{course.instructor?.username || 'Unknown Operator'}</h3>
+                                                    <p className="text-brand-primary font-black text-xs uppercase tracking-[0.2em] mt-2">{course.instructor?.expertise || 'Imperial Overseer'}</p>
+                                                </div>
+                                                <div className="flex flex-wrap justify-center md:justify-start gap-8 text-[10px] font-black uppercase tracking-widest text-brand-muted">
+                                                    <div className="flex items-center gap-2"><Star className="w-4 h-4 text-brand-primary fill-current" /> 4.9 Rank</div>
+                                                    <div className="flex items-center gap-2"><MessageCircle className="w-4 h-4 text-brand-primary" /> 15k Comms</div>
+                                                    <div className="flex items-center gap-2"><Users className="w-4 h-4 text-brand-primary" /> {(course.students?.length || 0).toLocaleString()} Nodes</div>
+                                                </div>
+                                                <p className="text-brand-muted font-medium leading-relaxed max-w-2xl">{course.instructor?.bio || 'Elite instructor dedicated to high-performance knowledge transfer across global sectors.'}</p>
                                             </div>
-                                            <p className="text-gray-600 leading-relaxed text-sm">{course.instructor?.bio || 'An experienced developer and educator passionate about sharing knowledge.'}</p>
                                         </div>
-                                    </div>
-                                </motion.div>
-                            )}
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
                         </div>
                     </div>
 
-                    {/* Sticky Sidebar */}
-                    <div className="lg:w-[400px] relative">
-                        <div className="sticky top-24 space-y-6">
-                            <div className="hidden lg:block aspect-video bg-gray-900 rounded-2xl overflow-hidden shadow-2xl relative group cursor-pointer ring-4 ring-white">
-                                <img
-                                    src={course.thumbnail ? (course.thumbnail.startsWith('http') ? course.thumbnail : `${API_URL.replace('/api', '')}${course.thumbnail}`) : 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=1200&q=80'}
-                                    className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity"
-                                    alt="Course Preview"
-                                    onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=1200&q=80'; }}
-                                />
-                                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <div className="w-16 h-16 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center text-white">
-                                        <Play className="w-8 h-8 fill-current" />
+                    {/* Sidebar */}
+                    <div className="lg:w-[450px] space-y-8">
+                        <div className="sticky top-32">
+                            <div className="bg-brand-surface p-10 rounded-[3rem] border border-brand-border shadow-2xl relative overflow-hidden glimmer transition-all">
+                                <div className="aspect-video bg-brand-bg rounded-3xl border border-brand-border mb-10 overflow-hidden relative group cursor-pointer transition-colors">
+                                    <img
+                                        src={course.thumbnail ? (course.thumbnail.startsWith('http') ? course.thumbnail : `${API_URL.replace('/api', '')}${course.thumbnail}`) : 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=800&q=80'}
+                                        alt="Course Preview"
+                                        className="w-full h-full object-cover opacity-60 group-hover:opacity-100 group-hover:scale-110 transition-all duration-1000"
+                                    />
+                                    <div className="absolute inset-0 flex items-center justify-center">
+                                        <div className="w-20 h-20 bg-brand-primary/10 backdrop-blur-xl border border-brand-primary/20 rounded-full flex items-center justify-center text-brand-primary group-hover:scale-110 group-hover:bg-brand-primary group-hover:text-white transition-all shadow-premium">
+                                            <Play className="w-10 h-10 fill-current ml-2" />
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
 
-                            <div className="bg-white p-8 rounded-3xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.1)] border border-gray-100 text-center lg:text-left">
-                                <div className="mb-6">
-                                    <span className="text-4xl font-extrabold text-gray-900 tracking-tight">
-                                        {course.isFree ? (
-                                            <span className="text-emerald-600">Free</span>
-                                        ) : (
-                                            `${course.currency || 'INR'} ${course.price}`
-                                        )}
-                                    </span>
+                                <div className="mb-10 text-center lg:text-left">
+                                    <p className="text-[10px] font-black text-brand-muted uppercase tracking-[0.3em] mb-3 text-center">Protocol Access Token</p>
+                                    <h4 className="text-5xl font-black text-brand-text italic tracking-tighter text-center">
+                                        {course.isFree ? <span className="text-brand-primary">OPEN</span> : `${course.price} UNT`}
+                                    </h4>
                                 </div>
 
-                                <button
+                                <motion.button
+                                    whileHover={{ scale: 1.02 }}
+                                    whileTap={{ scale: 0.98 }}
                                     onClick={handleEnroll}
                                     disabled={isEnrolling || isEnrolled}
-                                    className={`w-full py-4 ${isEnrolled ? 'bg-emerald-500' : 'bg-indigo-600'} text-white rounded-xl font-bold hover:opacity-90 transition-all shadow-lg transform hover:-translate-y-1 mb-4 disabled:opacity-70 disabled:cursor-not-allowed`}
+                                    className={`w-full py-6 rounded-[1.5rem] font-black text-[11px] uppercase tracking-[0.3em] transition-all shadow-[0_0_40px_rgba(37,99,235,0.2)] mb-6 flex items-center justify-center gap-4 ${isEnrolled ? 'bg-zinc-900 text-zinc-500 border border-[#1F1F1F]' : 'bg-blue-600 text-white hover:bg-blue-500 shadow-[0_10px_40px_-10px_rgba(37,99,235,0.5)]'}`}
                                 >
-                                    {isEnrolling ? (
-                                        <span className="flex items-center justify-center gap-2">
-                                            <Loader2 className="w-5 h-5 animate-spin" />
-                                            Enrolling...
-                                        </span>
-                                    ) : isEnrolled ? (
-                                        <span className="flex items-center justify-center gap-2">
-                                            <CheckCircle className="w-5 h-5" />
-                                            Enrolled - Access Videos Below
-                                        </span>
-                                    ) : (
-                                        `Enroll Now${course.isFree ? ' - Free' : ''}`
-                                    )}
-                                </button>
+                                    {isEnrolling ? <Loader2 className="w-5 h-5 animate-spin" /> : isEnrolled ? <><CheckCircle className="w-5 h-5" /> ENROLLED</> : `INITIATE SYNC`}
+                                </motion.button>
 
-                                <p className="text-xs text-center text-gray-400 mb-8 font-medium">30-Day Money-Back Guarantee • Full Lifetime Access</p>
+                                {isCourseCompleted && (
+                                    <motion.button
+                                        whileHover={{ y: -5 }}
+                                        onClick={downloadCertificate}
+                                        className="w-full py-6 bg-gradient-to-r from-blue-600 to-cyan-500 text-white rounded-[1.5rem] font-black text-[11px] uppercase tracking-[0.3em] shadow-[0_15px_40px_-10px_rgba(37,99,235,0.5)] flex items-center justify-center gap-4 mb-8"
+                                    >
+                                        <Award className="w-5 h-5" /> DOWNLOAD CREDS
+                                    </motion.button>
+                                )}
 
-                                <div className="space-y-4 text-left">
-                                    <h4 className="font-bold text-gray-900 text-sm uppercase tracking-wider">This course includes:</h4>
-                                    <ul className="space-y-3">
+                                <p className="text-[9px] font-black text-center text-zinc-600 uppercase tracking-widest mb-10">Secured via Imperial AES-256 Downlink</p>
+
+                                <div className="space-y-6">
+                                    <h4 className="text-[10px] font-black text-white uppercase tracking-[0.2em] border-b border-[#1F1F1F] pb-4">Syndicate Benefits:</h4>
+                                    <ul className="space-y-4">
                                         {features.map((feature, i) => (
-                                            <li key={i} className="flex items-center text-sm text-gray-600 font-medium">
-                                                <div className="w-6 flex justify-center mr-2"><CheckCircle className="h-4 w-4 text-indigo-500" /></div>
+                                            <li key={i} className="flex items-center text-[10px] font-black uppercase text-zinc-400 tracking-widest">
+                                                <div className="w-6 flex justify-start text-blue-500"><CheckCircle className="h-4 w-4" /></div>
                                                 {feature}
                                             </li>
                                         ))}
                                     </ul>
                                 </div>
 
-                                <div className="mt-8 pt-6 border-t border-gray-100 flex justify-between gap-4">
-                                    <button className="text-sm font-bold text-gray-900 hover:text-indigo-600 transition-colors">Share</button>
-                                    <button className="text-sm font-bold text-gray-900 hover:text-indigo-600 transition-colors">Gift</button>
-                                    <button className="text-sm font-bold text-gray-900 hover:text-indigo-600 transition-colors">Apply Coupon</button>
+                                <div className="mt-12 flex items-center justify-center gap-10">
+                                    <button className="text-[9px] font-black text-zinc-500 hover:text-white uppercase tracking-widest transition-colors">Transfer</button>
+                                    <button className="text-[9px] font-black text-zinc-500 hover:text-white uppercase tracking-widest transition-colors">Voucher</button>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
-            </div>
+            </main>
         </div>
     );
 };

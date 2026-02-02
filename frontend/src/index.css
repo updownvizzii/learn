@@ -1,24 +1,200 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 @import "tailwindcss";
 
+@variant dark (&:where(.dark, .dark *));
+
+@theme {
+  /* Brand colors mapped to CSS variables */
+  --color-brand-bg: var(--color-bg);
+  --color-brand-surface: var(--color-surface);
+  --color-brand-surface-hover: var(--color-surface-hover);
+  --color-brand-border: var(--color-border);
+  --color-brand-primary: var(--color-primary);
+  --color-brand-text: var(--color-text-main);
+  --color-brand-muted: var(--color-text-muted);
+
+  /* Fonts */
+  --font-outfit: 'Outfit', sans-serif;
+  --font-jakarta: 'Plus Jakarta Sans', sans-serif;
+
+  /* Utilities */
+  --shadow-premium: 0 20px 50px rgba(99, 102, 241, 0.1);
+  --shadow-premium-dark: 0 20px 50px rgba(0, 0, 0, 0.5);
+}
+
 :root {
-  font-family: 'Outfit', sans-serif;
+  /* Dark Theme (Default) */
+  --color-bg: #000000;
+  --color-surface: #0D0D0D;
+  --color-surface-hover: #151515;
+  --color-border: #1F1F1F;
+  --color-primary: #0066FF;
+  --color-primary-glow: rgba(0, 102, 255, 0.3);
+  --color-secondary: #00D2FF;
+  --color-text-main: #FFFFFF;
+  --color-text-muted: #A1A1AA;
+}
+
+/* Light Theme - Premium Purple & Pearl */
+:root:not(.dark) {
+  --color-bg: #F8F9FE;
+  --color-surface: #FFFFFF;
+  --color-surface-hover: #F0EDFF;
+  --color-border: #E8E5FF;
+  --color-primary: #6366F1;
+  --color-primary-glow: rgba(99, 102, 241, 0.12);
+  --color-secondary: #8B5CF6;
+  --color-text-main: #0F172A;
+  --color-text-muted: #64748B;
 }
 
 body {
-  font-family: 'Outfit', sans-serif;
+  font-family: var(--font-jakarta);
+  background-color: var(--color-bg);
+  color: var(--color-text-main);
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-/* Custom Animations */
-.fade-in {
-  animation: fadeIn 0.5s ease-in-out;
+/* Custom Glimmer Effect */
+.glimmer {
+  position: relative;
+  overflow: hidden;
 }
 
-@keyframes fadeIn {
-  from {
-    opacity: 0;
+.glimmer::after {
+  content: "";
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(45deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.05) 45%,
+      rgba(255, 255, 255, 0.1) 50%,
+      rgba(255, 255, 255, 0.05) 55%,
+      transparent 100%);
+  transform: rotate(45deg);
+  animation: glimmer 3s infinite;
+  pointer-events: none;
+}
+
+@keyframes glimmer {
+  0% {
+    transform: translate(-30%, -30%) rotate(45deg);
   }
 
-  to {
-    opacity: 1;
+  100% {
+    transform: translate(30%, 30%) rotate(45deg);
   }
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-primary);
+}
+
+/* Custom Scrollbar for Transcript */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--color-primary);
+  opacity: 0.3;
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--color-secondary);
+}
+
+/* Video Subtitle/Caption Styling */
+video::cue {
+  background-color: rgba(0, 0, 0, 0.9);
+  color: white;
+  font-size: 1.5rem;
+  font-weight: bold;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+  line-height: 1.4;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+}
+
+video::-webkit-media-text-track-container {
+  overflow: visible !important;
+}
+
+video::-webkit-media-text-track-display {
+  background-color: rgba(0, 0, 0, 0.9);
+  border-radius: 0.5rem;
+  padding: 0.5rem 1rem;
+  backdrop-filter: blur(10px);
+}
+
+/* Shimmer Loading Animation */
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+.shimmer {
+  background: linear-gradient(90deg,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0.05) 50%,
+      rgba(255, 255, 255, 0) 100%);
+  background-size: 1000px 100%;
+  animation: shimmer 2s infinite;
+}
+
+/* Smooth Transitions */
+* {
+  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Focus Styles for Accessibility */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Smooth Scroll */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Selection Color */
+::selection {
+  background-color: var(--color-primary-glow);
+  color: var(--color-text-main);
 }

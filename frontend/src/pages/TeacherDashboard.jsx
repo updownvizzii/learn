@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
     Layout,
     BookOpen,
@@ -17,7 +17,12 @@ import {
     Download,
     User,
     Mail,
-    Lock
+    Lock,
+    Trash2,
+    Shield,
+    Activity,
+    Cpu,
+    Radio
 } from 'lucide-react';
 import {
     AreaChart,
@@ -56,7 +61,7 @@ const enrollmentData = [
 
 const TeacherDashboard = () => {
 
-    const { logout, user: authUser } = useAuth();
+    const { logout, user: authUser, updateUser } = useAuth();
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState('overview');
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -67,28 +72,45 @@ const TeacherDashboard = () => {
         email: '',
         bio: '',
         upiId: '',
+        profilePicture: '',
         role: ''
     });
 
-    // Fetch Teacher's Data & Profile
+    const [statsData, setStatsData] = useState({
+        totalStudents: 0,
+        totalEarnings: 0,
+        activeCourses: 0,
+        coursePerformance: [],
+        monthlyEarnings: []
+    });
+
+    // Fetch Teacher's Data & Stats
     React.useEffect(() => {
         const fetchData = async () => {
             try {
                 const token = localStorage.getItem('accessToken');
+                const baseUrl = 'http://localhost:5000/api';
 
                 // Fetch Courses
-                const coursesRes = await fetch('http://localhost:5000/api/courses/my-courses', {
+                const coursesRes = await fetch(`${baseUrl}/courses/my-courses`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const coursesData = await coursesRes.json();
                 if (Array.isArray(coursesData)) setCourses(coursesData);
 
-                // Fetch Profile
-                const profileRes = await fetch('http://localhost:5000/api/auth/profile', {
+                // Fetch Stats
+                const statsRes = await fetch(`${baseUrl}/courses/teacher-stats`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-                const profileData = await profileRes.json();
-                if (profileData) setProfile(profileData);
+                const sData = await statsRes.json();
+                if (sData) setStatsData(sData);
+
+                // Fetch Profile
+                const profileRes = await fetch(`${baseUrl}/auth/profile`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const pData = await profileRes.json();
+                if (pData) setProfile(pData);
 
             } catch (error) {
                 console.error('Error fetching dashboard data:', error);
@@ -99,6 +121,38 @@ const TeacherDashboard = () => {
 
         fetchData();
     }, []);
+
+    const handleDecommission = async (id) => {
+        if (!window.confirm('PROTOCOL WARNING: Are you certain you wish to decommission this sector? This action is irreversible and all tactical data will be purged.')) return;
+
+        try {
+            const token = localStorage.getItem('accessToken');
+            const response = await fetch(`http://localhost:5000/api/courses/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (response.ok) {
+                setCourses(courses.filter(c => c._id !== id));
+                alert('SECTOR DECOMMISSIONED: Tactical cleanup successful.');
+            } else {
+                const contentType = response.headers.get('content-type');
+                let errorMessage = 'Decommissioning aborted.';
+                if (contentType && contentType.includes('application/json')) {
+                    const data = await response.json();
+                    errorMessage = data.message || errorMessage;
+                } else {
+                    const text = await response.text();
+                    console.error('Error response text:', text);
+                    errorMessage = `System Error (${response.status})`;
+                }
+                alert(`STRATEGIC FAILURE: ${errorMessage}`);
+            }
+        } catch (error) {
+            console.error('Decommission Error:', error);
+            alert('SYSTEM ERROR: Failed to communicate with Command Core.');
+        }
+    };
 
     const handleProfileUpdate = async () => {
         try {
@@ -113,26 +167,21 @@ const TeacherDashboard = () => {
             });
             const data = await response.json();
             if (response.ok) {
-                alert('Profile updated successfully!');
+                updateUser(data);
+                alert('PROFILE SYNCED: Tactical records updated in Command Core.');
             } else {
-                alert(data.message || 'Update failed');
+                alert(data.message || 'STRATEGIC FAILURE: Protocol update aborted.');
             }
         } catch (error) {
             console.error('Error updating profile:', error);
         }
     };
 
-    // Calculate Stats from Real Data
-    const totalStudents = courses.reduce((acc, course) => acc + (course.students ? course.students.length : 0), 0);
-    const totalRevenueValue = courses.reduce((acc, course) => acc + ((course.price || 0) * (course.students ? course.students.length : 0)), 0);
-    const activeCoursesCount = courses.filter(c => c.status === 'Active').length;
-    const avgRating = courses.length > 0 ? (courses.reduce((acc, c) => acc + (c.rating || 0), 0) / courses.length).toFixed(1) : '0.0';
-
     const stats = [
-        { id: 1, label: 'Total Revenue', value: `₹${totalRevenueValue}`, icon: DollarSign, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-        { id: 2, label: 'Total Students', value: totalStudents.toString(), icon: Users, color: 'text-blue-600', bg: 'bg-blue-50' },
-        { id: 3, label: 'Course Rating', value: avgRating, icon: Star, color: 'text-yellow-600', bg: 'bg-yellow-50' },
-        { id: 4, label: 'Active Courses', value: activeCoursesCount.toString(), icon: BookOpen, color: 'text-purple-600', bg: 'bg-purple-50' },
+        { id: 1, label: 'TOTAL CAPITAL', value: `₹${statsData.totalEarnings.toLocaleString()}`, icon: DollarSign, color: 'text-brand-primary', bg: 'bg-brand-primary/10' },
+        { id: 2, label: 'CLIENT BASE', value: statsData.totalStudents.toString(), icon: Users, color: 'text-brand-secondary', bg: 'bg-brand-secondary/10' },
+        { id: 3, label: 'ACTIVE DOMAINS', value: statsData.activeCourses.toString(), icon: BookOpen, color: 'text-brand-primary', bg: 'bg-brand-primary/10' },
+        { id: 4, label: 'CORE SECTORS', value: statsData.totalCourses?.toString() || '0', icon: BarChart2, color: 'text-brand-secondary', bg: 'bg-brand-secondary/10' },
     ];
 
     const transactions = [
@@ -140,129 +189,218 @@ const TeacherDashboard = () => {
         { id: 2, date: '2023-10-24', course: 'Python for Data Science', amount: '+$39.99', status: 'Completed' },
         { id: 3, date: '2023-10-24', course: 'Advanced React Patterns', amount: '+$59.99', status: 'Pending' },
         { id: 4, date: '2023-10-23', course: 'UI/UX Design Masterclass', amount: '+$29.99', status: 'Completed' },
-        { id: 5, date: '2023-10-23', Payout: 'Withdrawal to Bank ****1234', amount: '-$1,200.00', status: 'Processed' },
     ];
 
     const menuItems = [
-        { id: 'overview', label: 'Overview', icon: Layout },
-        { id: 'my-courses', label: 'My Courses', icon: BookOpen },
-        { id: 'analytics', label: 'Analytics', icon: BarChart2 },
-        { id: 'wallet', label: 'Earnings', icon: DollarSign },
-        { id: 'settings', label: 'Settings', icon: Settings },
+        { id: 'overview', label: 'COMMAND CENTER', icon: Layout },
+        { id: 'imperial', label: 'IMPERIAL INTERFACE', icon: Shield },
+        { id: 'my-courses', label: 'ACTIVE SECTORS', icon: BookOpen },
+        { id: 'analytics', label: 'STRATEGIC DATA', icon: BarChart2 },
+        { id: 'wallet', label: 'CAPITAL GAIN', icon: DollarSign },
+        { id: 'settings', label: 'PROTOCOL SETUP', icon: Settings },
     ];
 
     // --- Sub-Components for Views ---
+
+    const ImperialInterfaceView = () => (
+        <div className="h-[70vh] flex items-center justify-center relative overflow-hidden bg-brand-surface rounded-[3rem] border border-brand-border shadow-premium transition-all glimmer">
+            {/* Tactical Hex Grid Background */}
+            <div className="absolute inset-0 opacity-10 pointer-events-none"
+                style={{ backgroundImage: `radial-gradient(var(--color-primary) 0.5px, transparent 0.5px)`, backgroundSize: '24px 24px' }} />
+
+            {/* Scanning Line Animation */}
+            <motion.div
+                initial={{ top: '-10%' }}
+                animate={{ top: '110%' }}
+                transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+                className="absolute left-0 right-0 h-[2px] bg-brand-primary/20 shadow-[0_0_20px_var(--color-primary)] z-10"
+            />
+
+            {/* Corner Frames */}
+            <div className="absolute top-10 left-10 w-24 h-24 border-t-2 border-l-2 border-brand-primary/30 rounded-tl-xl" />
+            <div className="absolute top-10 right-10 w-24 h-24 rotate-90 border-t-2 border-l-2 border-brand-primary/30 rounded-tl-xl" />
+            <div className="absolute bottom-10 left-10 w-24 h-24 -rotate-90 border-t-2 border-l-2 border-brand-primary/30 rounded-tl-xl" />
+            <div className="absolute bottom-10 right-10 w-24 h-24 border-b-2 border-r-2 border-brand-primary/30 rounded-br-xl" />
+
+            <div className="relative z-20 flex flex-col items-center">
+                {/* Central Shield Orb */}
+                <div className="relative mb-12">
+                    <motion.div
+                        animate={{ scale: [1, 1.1, 1], opacity: [0.5, 0.8, 0.5] }}
+                        transition={{ duration: 3, repeat: Infinity }}
+                        className="absolute inset-0 bg-brand-primary/20 blur-[60px] rounded-full"
+                    />
+                    <div className="w-48 h-48 rounded-full bg-brand-bg border border-brand-primary/30 flex items-center justify-center shadow-premium relative overflow-hidden group">
+                        <div className="absolute inset-0 bg-gradient-to-tr from-brand-primary/5 to-transparent" />
+                        <Shield className="w-20 h-20 text-brand-primary group-hover:scale-110 transition-transform duration-500" />
+                    </div>
+                </div>
+
+                {/* Interface Text */}
+                <div className="text-center space-y-4">
+                    <motion.h2
+                        initial={{ opacity: 0, tracking: '0.5em' }}
+                        animate={{ opacity: 1, tracking: '1em' }}
+                        className="text-brand-primary font-black text-sm uppercase transition-all duration-1000 pl-[1em]"
+                    >
+                        IMPERIAL COMMAND INTERFACE
+                    </motion.h2>
+                    <div className="flex items-center justify-center gap-3">
+                        <div className="h-[1px] w-8 bg-brand-border" />
+                        <p className="text-brand-muted font-black text-[10px] uppercase tracking-[0.2em] italic">
+                            SYSTEM MONITORING V.2.4.0 // <span className="text-emerald-500">SECURE UPLINK</span>
+                        </p>
+                        <div className="h-[1px] w-8 bg-brand-border" />
+                    </div>
+                </div>
+
+                {/* Tactical Mini-Widgets */}
+                <div className="mt-16 grid grid-cols-3 gap-12">
+                    <div className="text-center">
+                        <div className="flex items-center justify-center gap-2 mb-2">
+                            <Activity className="w-3 h-3 text-brand-primary" />
+                            <span className="text-[9px] font-black text-brand-muted uppercase tracking-widest">Latency</span>
+                        </div>
+                        <p className="text-brand-text font-black text-xs uppercase tracking-tighter italic transition-colors">24ms <span className="text-brand-primary">Nominal</span></p>
+                    </div>
+                    <div className="text-center border-x border-brand-border px-12 transition-colors">
+                        <div className="flex items-center justify-center gap-2 mb-2">
+                            <Cpu className="w-3 h-3 text-brand-primary" />
+                            <span className="text-[9px] font-black text-brand-muted uppercase tracking-widest">Enclave</span>
+                        </div>
+                        <p className="text-brand-text font-black text-xs uppercase tracking-tighter italic transition-colors">Encrypted <span className="text-brand-primary">Live</span></p>
+                    </div>
+                    <div className="text-center">
+                        <div className="flex items-center justify-center gap-2 mb-2">
+                            <Radio className="w-3 h-3 text-brand-primary" />
+                            <span className="text-[9px] font-black text-brand-muted uppercase tracking-widest">Signal</span>
+                        </div>
+                        <p className="text-brand-text font-black text-xs uppercase tracking-tighter italic transition-colors">4.9GHz <span className="text-brand-primary">Stable</span></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
 
     const OverviewView = () => (
         <div className="space-y-8">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 {stats.map((stat) => (
-                    <div key={stat.id} className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm hover:shadow-lg transition-all duration-300 group">
-                        <div className="flex items-center justify-between mb-4">
-                            <div className={`p-3 rounded-2xl ${stat.bg} ${stat.color} group-hover:scale-110 transition-transform duration-300`}>
+                    <div key={stat.id} className="bg-brand-surface p-8 rounded-[2rem] border border-brand-border shadow-premium dark:shadow-premium-dark hover:border-brand-primary/40 transition-all group relative overflow-hidden glimmer">
+                        <div className="flex items-center justify-between mb-6 relative z-10">
+                            <div className={`p-4 rounded-2xl bg-brand-primary/10 text-brand-primary group-hover:scale-110 shadow-xl transition-all`}>
                                 <stat.icon className="w-6 h-6" />
                             </div>
-                            <span className="text-xs font-bold text-gray-400 bg-gray-50 px-2 py-1 rounded-lg">+12% this month</span>
+                            <span className="text-[10px] font-black text-brand-primary bg-brand-primary/10 px-3 py-1.5 rounded-xl uppercase tracking-widest">+12% ACCEL</span>
                         </div>
-                        <div>
-                            <p className="text-gray-500 text-sm font-medium">{stat.label}</p>
-                            <h3 className="text-3xl font-extrabold text-gray-900 mt-1">{stat.value}</h3>
+                        <div className="relative z-10">
+                            <p className="text-brand-muted text-[10px] font-black uppercase tracking-[0.2em] mb-1 transition-colors">{stat.label}</p>
+                            <h3 className="text-4xl font-black text-brand-text mt-1 group-hover:text-brand-primary transition-colors uppercase tracking-tight">{stat.value}</h3>
                         </div>
                     </div>
                 ))}
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <div className="lg:col-span-2 bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
-                    <div className="flex items-center justify-between mb-6">
-                        <h3 className="text-lg font-bold text-gray-900">Revenue Analytics</h3>
-                        <select className="bg-gray-50 border border-gray-200 rounded-lg text-sm px-3 py-1 outline-none focus:border-indigo-500">
-                            <option>This Year</option>
-                            <option>Last Year</option>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+                <div className="lg:col-span-2 bg-brand-surface p-8 rounded-[2.5rem] border border-brand-border shadow-premium glimmer transition-all">
+                    <div className="flex items-center justify-between mb-10">
+                        <h3 className="text-xl font-black text-brand-text uppercase tracking-tight italic transition-colors">Domain Capital Yield</h3>
+                        <select className="bg-brand-bg border border-brand-border text-brand-muted rounded-xl text-[10px] font-black px-4 py-2 uppercase tracking-widest outline-none focus:border-brand-primary/50 transition-all">
+                            <option>Annual Scan</option>
+                            <option>Quarterly Scan</option>
                         </select>
                     </div>
-                    <div className="h-72">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={revenueData}>
+                    <div className="h-80">
+                        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                            <AreaChart data={statsData.monthlyEarnings}>
                                 <defs>
                                     <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.2} />
-                                        <stop offset="95%" stopColor="#4f46e5" stopOpacity={0} />
+                                        <stop offset="5%" stopColor="var(--color-primary)" stopOpacity={0.4} />
+                                        <stop offset="95%" stopColor="var(--color-primary)" stopOpacity={0} />
                                     </linearGradient>
                                 </defs>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#9ca3af', fontSize: 12 }} dy={10} />
-                                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#9ca3af', fontSize: 12 }} tickFormatter={(value) => `$${value}`} />
-                                <Tooltip
-                                    contentStyle={{ backgroundColor: '#fff', borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                                    itemStyle={{ color: '#4f46e5', fontWeight: 'bold' }}
-                                />
-                                <Area type="monotone" dataKey="amount" stroke="#4f46e5" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" />
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border)" />
+                                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: 'var(--color-muted)', fontSize: 10, fontWeight: 800 }} />
+                                <YAxis axisLine={false} tickLine={false} tick={{ fill: 'var(--color-muted)', fontSize: 10, fontWeight: 800 }} />
+                                <Tooltip contentStyle={{ backgroundColor: 'var(--color-surface)', borderRadius: '16px', border: '1px solid var(--color-border)', color: 'var(--color-text)' }} />
+                                <Area type="monotone" dataKey="amount" stroke="var(--color-primary)" strokeWidth={5} fillOpacity={1} fill="url(#colorRevenue)" />
                             </AreaChart>
                         </ResponsiveContainer>
                     </div>
                 </div>
 
-                <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
-                    <h3 className="text-lg font-bold text-gray-900 mb-6">Top Performing Courses</h3>
-                    <div className="h-72">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={enrollmentData} layout="vertical">
-                                <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f0f0f0" />
-                                <XAxis type="number" hide />
-                                <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fill: '#4b5563', fontWeight: 500, fontSize: 12 }} width={70} />
-                                <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ borderRadius: '12px' }} />
-                                <Bar dataKey="students" fill="#8b5cf6" radius={[0, 4, 4, 0]} barSize={20} />
+                <div className="bg-brand-surface p-8 rounded-[2.5rem] border border-brand-border shadow-premium glimmer transition-all">
+                    <h3 className="text-xl font-black text-brand-text mb-10 uppercase tracking-tight italic transition-colors">Unit Distribution</h3>
+                    <div className="h-80">
+                        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                            <BarChart data={statsData.coursePerformance}>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border)" />
+                                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: 'var(--color-muted)', fontSize: 10, fontWeight: 800 }} />
+                                <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ backgroundColor: 'var(--color-surface)', borderRadius: '12px', border: '1px solid var(--color-border)' }} />
+                                <Bar dataKey="students" fill="var(--color-primary)" radius={[6, 6, 0, 0]} barSize={30} />
                             </BarChart>
                         </ResponsiveContainer>
                     </div>
                 </div>
             </div>
 
-            <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
-                <div className="p-6 border-b border-gray-100 flex justify-between items-center">
-                    <h3 className="text-lg font-bold text-gray-900">Your Courses</h3>
+            <div className="bg-brand-surface rounded-[2.5rem] border border-brand-border shadow-2xl overflow-hidden glimmer">
+                <div className="p-8 border-b border-brand-border flex justify-between items-center">
+                    <h3 className="text-xl font-black text-brand-text uppercase tracking-tight italic">Active Sectors</h3>
                     <button
                         onClick={() => navigate('/teacher/create-course')}
-                        className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-xl font-medium text-sm hover:bg-indigo-700 transition"
+                        className="flex items-center px-6 py-3 bg-brand-primary text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-premium hover:bg-brand-primary/90 transition-all"
                     >
-                        <Plus className="w-4 h-4 mr-2" /> Create New Course
+                        <Plus className="w-4 h-4 mr-2" /> Initiate Sector
                     </button>
                 </div>
                 <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm text-gray-600">
-                        <thead className="bg-gray-50 text-gray-500 font-medium uppercase tracking-wider text-xs">
+                    <table className="w-full text-left text-sm text-brand-text">
+                        <thead className="bg-brand-surface-hover text-brand-muted font-black uppercase tracking-widest text-[10px] border-b border-brand-border">
                             <tr>
-                                <th className="px-6 py-4">Course Name</th>
-                                <th className="px-6 py-4">Status</th>
-                                <th className="px-6 py-4">Students</th>
-                                <th className="px-6 py-4">Revenue</th>
-                                <th className="px-6 py-4">Rating</th>
-                                <th className="px-6 py-4 text-right">Actions</th>
+                                <th className="px-8 py-5">Sector Name</th>
+                                <th className="px-8 py-5">Status</th>
+                                <th className="px-8 py-5">Units</th>
+                                <th className="px-8 py-5">Capital</th>
+                                <th className="px-8 py-5">Rating</th>
+                                <th className="px-8 py-5 text-right">Actions</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-100">
+                        <tbody className="divide-y divide-brand-border">
                             {courses.slice(0, 4).map((course) => (
-                                <tr key={course._id} className="hover:bg-gray-50/50 transition-colors">
-                                    <td className="px-6 py-4">
-                                        <div className="flex items-center gap-3">
-                                            <img src={course.thumbnail ? (course.thumbnail.startsWith('http') ? course.thumbnail : `http://localhost:5000${course.thumbnail}`) : 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=500&q=80'} alt="" className="w-10 h-10 rounded-lg object-cover" />
-                                            <span className="font-semibold text-gray-900">{course.title}</span>
+                                <tr key={course._id} className="hover:bg-brand-bg/50 transition-colors">
+                                    <td className="px-8 py-5">
+                                        <div className="flex items-center gap-4">
+                                            <img src={course.thumbnail ? (course.thumbnail.startsWith('http') ? course.thumbnail : `http://localhost:5000${course.thumbnail}`) : 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=500&q=80'} alt="" className="w-12 h-12 rounded-xl object-cover border border-brand-border" />
+                                            <span className="font-bold text-brand-text transition-colors">{course.title}</span>
                                         </div>
                                     </td>
-                                    <td className="px-6 py-4">
-                                        <span className={`px-2 py-1 rounded-md text-xs font-bold ${course.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+                                    <td className="px-8 py-5">
+                                        <span className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-widest ${course.status === 'Active' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-brand-bg text-brand-muted border border-brand-border'}`}>
                                             {course.status}
                                         </span>
                                     </td>
-                                    <td className="px-6 py-4 font-medium">{course.students ? course.students.length : 0}</td>
-                                    <td className="px-6 py-4 font-medium">₹{(course.price || 0) * (course.students ? course.students.length : 0)}</td>
-                                    <td className="px-6 py-4 flex items-center gap-1">
-                                        <Star className="w-4 h-4 text-yellow-400 fill-current" />
-                                        {course.rating || '0.0'}
+                                    <td className="px-8 py-5 font-bold text-brand-text transition-colors">{course.students ? course.students.length : 0}</td>
+                                    <td className="px-8 py-5 font-bold text-brand-text transition-colors">₹{(course.price || 0) * (course.students ? course.students.length : 0)}</td>
+                                    <td className="px-8 py-5 flex items-center gap-1">
+                                        <Star className="w-4 h-4 text-brand-primary fill-current" />
+                                        <span className="text-brand-text font-bold transition-colors">{course.rating || '0.0'}</span>
                                     </td>
-                                    <td className="px-6 py-4 text-right">
-                                        <button className="text-gray-400 hover:text-indigo-600"><MoreVertical className="w-5 h-5" /></button>
+                                    <td className="px-8 py-5 text-right flex justify-end gap-2">
+                                        <button
+                                            onClick={() => navigate(`/teacher/edit-course/${course._id}`)}
+                                            className="text-brand-muted hover:text-brand-primary p-2 rounded-lg hover:bg-brand-bg transition-all"
+                                            title="Modify Asset"
+                                        >
+                                            <Settings className="w-5 h-5" />
+                                        </button>
+                                        <button
+                                            onClick={() => handleDecommission(course._id)}
+                                            className="text-brand-muted hover:text-red-500 p-2 rounded-lg hover:bg-red-500/10 transition-all"
+                                            title="Decommission Sector"
+                                        >
+                                            <Trash2 className="w-5 h-5" />
+                                        </button>
                                     </td>
                                 </tr>
                             ))}
@@ -275,52 +413,65 @@ const TeacherDashboard = () => {
 
     const MyCoursesView = () => (
         <div className="space-y-6">
-            <div className="flex justify-between items-center bg-white p-4 rounded-3xl border border-gray-100 shadow-sm">
+            <div className="flex justify-between items-center bg-brand-surface p-6 rounded-[2.5rem] border border-brand-border shadow-premium transition-all glimmer">
                 <div className="relative flex-grow max-w-md">
-                    <Search className="absolute left-4 top-3.5 w-5 h-5 text-gray-400" />
+                    <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-brand-muted" />
                     <input
                         type="text"
-                        placeholder="Search your courses..."
-                        className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                        placeholder="Access database..."
+                        className="w-full pl-14 pr-6 py-3.5 bg-brand-bg border border-brand-border rounded-2xl outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary/50 transition-all text-brand-text placeholder:text-brand-muted/20"
                     />
                 </div>
-                <div className="flex items-center gap-3">
-                    <button className="p-3 bg-gray-50 rounded-2xl text-gray-500 hover:bg-gray-100 hover:text-indigo-600 transition">
+                <div className="flex items-center gap-4">
+                    <button className="p-3.5 bg-brand-bg rounded-2xl border border-brand-border text-brand-muted hover:bg-brand-surface hover:text-brand-text transition-all">
                         <Filter className="w-5 h-5" />
                     </button>
                     <button
                         onClick={() => navigate('/teacher/create-course')}
-                        className="flex items-center px-6 py-3 bg-indigo-600 text-white rounded-2xl font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition transform hover:-translate-y-0.5"
+                        className="flex items-center px-6 py-3.5 bg-brand-primary text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-premium hover:bg-brand-primary/90 transition transform hover:-translate-y-0.5"
                     >
-                        <Plus className="w-5 h-5 mr-2" /> New Course
+                        <Plus className="w-5 h-5 mr-2" /> Initiate Sector
                     </button>
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                 {courses.map(course => (
-                    <div key={course._id} className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-xl transition-all duration-300 group">
-                        <div className="relative h-48 overflow-hidden">
+                    <div key={course._id} className="bg-brand-surface rounded-[2.5rem] border border-brand-border shadow-premium overflow-hidden hover:border-brand-primary/40 transition-all duration-300 group glimmer">
+                        <div className="relative h-56 overflow-hidden">
                             <img src={course.thumbnail ? (course.thumbnail.startsWith('http') ? course.thumbnail : `http://localhost:5000${course.thumbnail}`) : 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=500&q=80'} alt={course.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                            <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-lg text-xs font-bold text-gray-900">
-                                {course.students ? course.students.length : 0} Students
+                            <div className="absolute top-6 right-6 bg-brand-surface/80 backdrop-blur-sm px-4 py-2 rounded-xl text-xs font-black text-brand-text uppercase tracking-widest border border-brand-border">
+                                {course.students ? course.students.length : 0} Units
                             </div>
                         </div>
-                        <div className="p-6">
-                            <div className="flex justify-between items-start mb-3">
-                                <span className={`px-2.5 py-1 rounded-lg text-xs font-bold ${course.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+                        <div className="p-8">
+                            <div className="flex justify-between items-start mb-4">
+                                <span className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-widest ${course.status === 'Active' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-brand-muted/10 text-brand-muted'}`}>
                                     {course.status}
                                 </span>
-                                <div className="flex items-center text-yellow-500 text-xs font-bold">
+                                <div className="flex items-center text-brand-primary text-xs font-black uppercase tracking-widest">
                                     <Star className="w-4 h-4 mr-1 fill-current" /> {course.rating || '0.0'}
                                 </div>
                             </div>
-                            <h3 className="font-bold text-gray-900 mb-2 line-clamp-2">{course.title}</h3>
+                            <h3 className="font-black text-brand-text text-xl mb-3 line-clamp-2 italic transition-colors">{course.title}</h3>
                             <div className="flex items-center justify-between mt-6">
-                                <span className="font-bold text-lg text-indigo-600">₹{(course.price || 0) * (course.students ? course.students.length : 0)}</span>
-                                <button className="text-gray-400 hover:text-indigo-600 p-2 rounded-lg hover:bg-gray-50">
-                                    <Settings className="w-5 h-5" />
-                                </button>
+                                <span className="font-black text-2xl text-brand-primary">₹{(course.price || 0) * (course.students ? course.students.length : 0)}</span>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={() => navigate(`/teacher/edit-course/${course._id}`)}
+                                        className="text-brand-muted hover:text-brand-primary p-3 rounded-xl hover:bg-brand-bg transition-all"
+                                        title="Modify Asset"
+                                    >
+                                        <Settings className="w-5 h-5" />
+                                    </button>
+                                    <button
+                                        onClick={() => handleDecommission(course._id)}
+                                        className="text-brand-muted hover:text-red-500 p-3 rounded-xl hover:bg-red-500/10 transition-all"
+                                        title="Decommission Sector"
+                                    >
+                                        <Trash2 className="w-5 h-5" />
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -332,41 +483,41 @@ const TeacherDashboard = () => {
     const AnalyticsView = () => (
         <div className="space-y-8">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm">
-                    <h3 className="text-xl font-bold text-gray-900 mb-6">Student Enrollment Growth</h3>
+                <div className="bg-brand-surface p-8 rounded-[2.5rem] border border-brand-border shadow-premium glimmer transition-all">
+                    <h3 className="text-xl font-black text-brand-text mb-6 uppercase tracking-tight italic transition-colors">Unit Acquisition Trajectory</h3>
                     <div className="h-80">
-                        <ResponsiveContainer width="100%" height="100%">
+                        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                             <LineChart data={revenueData}>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#9ca3af', fontSize: 12 }} dy={10} />
-                                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#9ca3af', fontSize: 12 }} />
-                                <Tooltip contentStyle={{ borderRadius: '12px', border: 'none' }} />
-                                <Line type="monotone" dataKey="students" stroke="#8b5cf6" strokeWidth={4} dot={{ r: 4, strokeWidth: 0 }} activeDot={{ r: 8 }} />
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border)" />
+                                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: 'var(--color-muted)', fontSize: 10, fontWeight: 800 }} />
+                                <YAxis axisLine={false} tickLine={false} tick={{ fill: 'var(--color-muted)', fontSize: 10, fontWeight: 800 }} />
+                                <Tooltip contentStyle={{ backgroundColor: 'var(--color-surface)', borderRadius: '16px', border: '1px solid var(--color-border)', color: 'var(--color-text)' }} />
+                                <Line type="monotone" dataKey="students" stroke="var(--color-primary)" strokeWidth={5} dot={{ r: 4, strokeWidth: 0, fill: 'var(--color-primary)' }} activeDot={{ r: 8 }} />
                             </LineChart>
                         </ResponsiveContainer>
                     </div>
                 </div>
-                <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm">
-                    <h3 className="text-xl font-bold text-gray-900 mb-6">Device Usage</h3>
+                <div className="bg-brand-surface p-8 rounded-[2.5rem] border border-brand-border shadow-premium glimmer transition-all">
+                    <h3 className="text-xl font-black text-brand-text mb-6 uppercase tracking-tight italic transition-colors">System Access Points</h3>
                     <div className="h-80 flex items-center justify-center">
-                        <div className="text-center text-gray-400">
+                        <div className="text-center text-brand-muted">
                             <BarChart2 className="w-16 h-16 mx-auto mb-4 opacity-20" />
-                            <p>Detailed device analytics coming soon.</p>
+                            <p className="font-bold text-sm uppercase tracking-widest">Detailed system access analytics coming soon.</p>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm">
-                <h3 className="text-xl font-bold text-gray-900 mb-6">Revenue Overview</h3>
+            <div className="bg-brand-surface p-8 rounded-[2.5rem] border border-brand-border shadow-premium glimmer transition-all">
+                <h3 className="text-xl font-black text-brand-text mb-6 uppercase tracking-tight italic transition-colors">Capital Flow Overview</h3>
                 <div className="h-96">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={revenueData}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                            <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#9ca3af' }} />
-                            <YAxis axisLine={false} tickLine={false} tick={{ fill: '#9ca3af' }} />
-                            <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ borderRadius: '12px' }} />
-                            <Bar dataKey="amount" fill="#4f46e5" radius={[6, 6, 0, 0]} barSize={40} />
+                    <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                        <BarChart data={statsData.monthlyEarnings}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border)" />
+                            <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: 'var(--color-muted)', fontSize: 10, fontWeight: 800 }} />
+                            <YAxis axisLine={false} tickLine={false} tick={{ fill: 'var(--color-muted)', fontSize: 10, fontWeight: 800 }} />
+                            <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ backgroundColor: 'var(--color-surface)', borderRadius: '16px', border: '1px solid var(--color-border)', color: 'var(--color-text)' }} />
+                            <Bar dataKey="amount" fill="var(--color-primary)" radius={[6, 6, 0, 0]} barSize={40} />
                         </BarChart>
                     </ResponsiveContainer>
                 </div>
@@ -374,41 +525,54 @@ const TeacherDashboard = () => {
         </div>
     );
 
-    const EarningsView = () => (
-        <div className="space-y-8">
-            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-3xl p-10 text-white shadow-xl shadow-indigo-200">
-                <p className="text-indigo-100 font-medium mb-2">Total Life-time Earnings</p>
-                <div className="flex items-end gap-4">
-                    <h2 className="text-5xl font-bold">$12,450.00</h2>
-                    <span className="mb-2 bg-white/20 px-3 py-1 rounded-lg text-sm font-medium">+15% vs last month</span>
+    const WalletView = () => (
+        <div className="space-y-12">
+            <div className="bg-brand-surface border-2 border-brand-primary rounded-[3rem] p-12 text-brand-text shadow-premium glimmer relative overflow-hidden transition-all">
+                <div className="absolute top-0 right-0 p-8">
+                    <div className="w-20 h-20 bg-brand-primary/10 rounded-full blur-3xl" />
                 </div>
-                <div className="mt-8 flex gap-4">
-                    <button className="bg-white text-indigo-600 px-6 py-3 rounded-xl font-bold hover:bg-indigo-50 transition shadow-lg">Withdraw Funds</button>
-                    <button className="bg-indigo-700 text-white px-6 py-3 rounded-xl font-bold hover:bg-indigo-800 transition flex items-center gap-2">
-                        <Download className="w-4 h-4" /> Download Statement
+                <p className="text-brand-primary font-black text-[10px] uppercase tracking-[0.5em] mb-6">// AGGREGATED RESOURCE POOL</p>
+                <div className="flex items-end gap-6 mb-12">
+                    <h2 className="text-8xl font-black italic tracking-tighter uppercase">₹{statsData.totalEarnings || '0.00'}</h2>
+                    <span className="mb-4 bg-brand-primary/10 border border-brand-primary/30 px-5 py-2 rounded-2xl text-xs font-black text-brand-primary uppercase tracking-widest">+24% VELOCITY</span>
+                </div>
+                <div className="flex gap-6 relative z-10">
+                    <button className="bg-brand-primary text-white px-10 py-5 rounded-[1.5rem] font-black text-xs uppercase tracking-[0.2em] hover:bg-brand-primary/90 transition-all shadow-premium">Initiate Extraction</button>
+                    <button className="bg-brand-bg border border-brand-border text-brand-muted px-10 py-5 rounded-[1.5rem] font-black text-xs uppercase tracking-[0.2em] hover:text-brand-text transition-all flex items-center gap-3">
+                        <Download className="w-5 h-5" /> Export Log
                     </button>
                 </div>
             </div>
 
-            <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
-                <div className="p-8 border-b border-gray-100">
-                    <h3 className="text-xl font-bold text-gray-900">Recent Transactions</h3>
+            <div className="bg-brand-surface rounded-[3rem] border border-brand-border shadow-premium overflow-hidden glimmer transition-all">
+                <div className="p-10 border-b border-brand-border flex justify-between items-center bg-brand-bg/40">
+                    <h3 className="text-2xl font-black text-brand-text uppercase tracking-tight italic transition-colors">RESOURCE TRANSFER LOG</h3>
+                    <div className="flex gap-4">
+                        <div className="px-5 py-2.5 bg-brand-bg border border-brand-border rounded-xl text-[10px] font-black text-brand-muted uppercase tracking-widest">
+                            {transactions.length} ENTRIES FOUND
+                        </div>
+                    </div>
                 </div>
-                <div className="divide-y divide-gray-100">
+                <div className="divide-y divide-brand-border">
                     {transactions.map(tx => (
-                        <div key={tx.id} className="p-6 flex items-center justify-between hover:bg-gray-50 transition">
-                            <div>
-                                <h4 className="font-bold text-gray-900">{tx.course || tx.Payout}</h4>
-                                <p className="text-sm text-gray-500">{tx.date}</p>
+                        <div key={tx.id} className="p-10 flex items-center justify-between hover:bg-brand-bg/50 transition-all group">
+                            <div className="flex items-center gap-6">
+                                <div className="w-14 h-14 bg-brand-bg border border-brand-border rounded-2xl flex items-center justify-center group-hover:border-brand-primary/30 transition-all">
+                                    <DollarSign className="w-6 h-6 text-brand-primary" />
+                                </div>
+                                <div>
+                                    <h4 className="font-black text-brand-text text-xl uppercase italic tracking-tight transition-colors">{tx.course || tx.Payout}</h4>
+                                    <p className="text-[10px] text-brand-muted font-black uppercase tracking-widest mt-1 transition-colors">TIMESTAMP: {tx.date}</p>
+                                </div>
                             </div>
                             <div className="text-right">
-                                <span className={`block font-bold text-lg ${tx.amount.startsWith('+') ? 'text-green-600' : 'text-gray-900'}`}>
+                                <span className={`block font-black text-3xl italic tracking-tighter transition-colors ${tx.amount.startsWith('+') ? 'text-brand-primary' : 'text-brand-text'}`}>
                                     {tx.amount}
                                 </span>
-                                <span className={`text-xs font-bold px-2 py-1 rounded-md ${tx.status === 'Completed' || tx.status === 'Processed' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
-                                    }`}>
+                                <div className="mt-2 text-[10px] font-black uppercase tracking-[0.3em] flex items-center justify-end gap-2 text-brand-muted transition-colors">
+                                    <div className={`w-2 h-2 rounded-full ${tx.status === 'Completed' || tx.status === 'Processed' ? 'bg-brand-primary' : 'bg-brand-secondary'}`} />
                                     {tx.status}
-                                </span>
+                                </div>
                             </div>
                         </div>
                     ))}
@@ -419,62 +583,71 @@ const TeacherDashboard = () => {
 
     const SettingsView = () => (
         <div className="max-w-4xl mx-auto space-y-8">
-            <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm">
-                <h3 className="text-xl font-bold text-gray-900 mb-8 flex items-center gap-3">
-                    <User className="w-6 h-6 text-indigo-600" /> Profile Information
+            <div className="bg-brand-surface p-8 rounded-[2.5rem] border border-brand-border shadow-premium glimmer transition-all">
+                <h3 className="text-xl font-black text-brand-text mb-8 flex items-center gap-3 uppercase tracking-tight italic transition-colors">
+                    <User className="w-6 h-6 text-brand-primary" /> Operator Profile
                 </h3>
                 <div className="space-y-6">
                     <div className="flex items-center gap-6 mb-8">
-                        <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.username || 'default'}`} alt="Profile" className="w-24 h-24 rounded-full border-4 border-gray-100" />
-                        <button className="px-5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl font-bold text-sm hover:bg-gray-100 transition">Change Photo</button>
+                        <img src={profile.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.username || 'default'}`} alt="Profile" className="w-24 h-24 rounded-full border-4 border-brand-border p-0.5 object-cover transition-all" />
+                        <div className="flex-1 space-y-2">
+                            <label className="block text-[10px] font-black text-brand-muted uppercase tracking-widest">Biometric Uplink URL</label>
+                            <input
+                                type="text"
+                                value={profile.profilePicture || ''}
+                                onChange={(e) => setProfile(prev => ({ ...prev, profilePicture: e.target.value }))}
+                                placeholder="https://image-source.com/avatar.jpg"
+                                className="w-full px-6 py-3 bg-brand-bg border border-brand-border rounded-xl outline-none focus:border-brand-primary/50 text-brand-text text-xs font-bold transition-all"
+                            />
+                        </div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-2">Display Name</label>
+                            <label className="block text-sm font-black text-brand-muted uppercase tracking-widest mb-2 transition-colors">Operator Handle</label>
                             <input
                                 type="text"
                                 value={profile.username}
                                 onChange={(e) => setProfile(prev => ({ ...prev, username: e.target.value }))}
-                                className="w-full px-5 py-3 rounded-xl border border-gray-200 focus:border-indigo-500 outline-none"
+                                className="w-full px-6 py-3.5 rounded-xl border border-brand-border bg-brand-bg focus:border-brand-primary/50 outline-none text-brand-text placeholder:text-brand-muted/40 transition-all"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-2">UPI ID (for payments)</label>
+                            <label className="block text-sm font-black text-brand-muted uppercase tracking-widest mb-2 transition-colors">Capital Transfer ID</label>
                             <input
                                 type="text"
                                 value={profile.upiId || ''}
                                 onChange={(e) => setProfile(prev => ({ ...prev, upiId: e.target.value }))}
                                 placeholder="yourname@upi"
-                                className="w-full px-5 py-3 rounded-xl border border-gray-200 focus:border-indigo-500 font-bold text-indigo-600 outline-none"
+                                className="w-full px-6 py-3.5 rounded-xl border border-brand-border bg-brand-bg focus:border-brand-primary/50 font-bold text-brand-primary outline-none placeholder:text-brand-muted/40 transition-all font-bold"
                             />
                         </div>
                     </div>
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-2">Bio</label>
+                        <label className="block text-sm font-black text-brand-muted uppercase tracking-widest mb-2 transition-colors">Bio-Signature</label>
                         <textarea
                             rows="4"
                             value={profile.bio || ''}
                             onChange={(e) => setProfile(prev => ({ ...prev, bio: e.target.value }))}
-                            className="w-full px-5 py-3 rounded-xl border border-gray-200 focus:border-indigo-500 outline-none"
+                            className="w-full px-6 py-3.5 rounded-xl border border-brand-border bg-brand-bg focus:border-brand-primary/50 outline-none text-brand-text placeholder:text-brand-muted/40 transition-all"
                         ></textarea>
                     </div>
                 </div>
             </div>
 
-            <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm">
-                <h3 className="text-xl font-bold text-gray-900 mb-8 flex items-center gap-3">
-                    <Lock className="w-6 h-6 text-indigo-600" /> Security
+            <div className="bg-brand-surface p-8 rounded-[2.5rem] border border-brand-border shadow-premium glimmer transition-all">
+                <h3 className="text-xl font-black text-brand-text mb-8 flex items-center gap-3 uppercase tracking-tight italic transition-colors">
+                    <Lock className="w-6 h-6 text-brand-primary" /> Access Protocol
                 </h3>
                 <div className="space-y-6">
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-2">Email Address</label>
+                        <label className="block text-sm font-black text-brand-muted uppercase tracking-widest mb-2 transition-colors">Secure Email Address</label>
                         <div className="relative">
-                            <Mail className="absolute left-4 top-3.5 w-5 h-5 text-gray-400" />
+                            <Mail className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-brand-muted" />
                             <input
                                 type="email"
                                 value={profile.email}
                                 readOnly
-                                className="w-full pl-12 pr-5 py-3 rounded-xl border border-gray-200 bg-gray-50 outline-none"
+                                className="w-full pl-14 pr-6 py-3.5 rounded-xl border border-brand-border bg-brand-bg outline-none text-brand-text transition-all"
                             />
                         </div>
                     </div>
@@ -482,109 +655,142 @@ const TeacherDashboard = () => {
             </div>
 
             <div className="flex justify-end gap-4">
-                <button className="px-8 py-3 bg-gray-100 text-gray-600 rounded-xl font-bold hover:bg-gray-200 transition">Cancel</button>
+                <button className="px-8 py-4 bg-brand-surface text-brand-muted rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-brand-bg transition-all border border-brand-border">Cancel</button>
                 <button
                     onClick={handleProfileUpdate}
-                    className="px-8 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition shadow-lg shadow-indigo-200"
+                    className="px-8 py-4 bg-brand-primary text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-brand-primary/90 transition-all shadow-premium"
                 >
-                    Save Changes
+                    Save Protocol
                 </button>
             </div>
         </div>
     );
 
     return (
-        <div className="flex h-screen bg-[#f8fafc] overflow-hidden font-sans text-gray-900">
-            {/* Background Blobs */}
-            <div className="fixed top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
-                <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-indigo-200/30 rounded-full blur-[120px]" />
-                <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-purple-200/30 rounded-full blur-[120px]" />
-            </div>
-
+        <div className="min-h-screen bg-brand-bg font-jakarta text-brand-text flex overflow-hidden relative transition-colors">
             {/* Sidebar */}
             <motion.aside
-                initial={{ x: -250 }}
-                animate={{ x: 0 }}
-                className={`${isSidebarOpen ? 'w-64' : 'w-20'} bg-white/80 backdrop-blur-xl border-r border-gray-100 z-20 flex flex-col transition-all duration-300 shadow-xl shadow-indigo-100/20`}
+                initial={false}
+                animate={{ width: isSidebarOpen ? 280 : 0 }}
+                className="bg-brand-surface border-r border-brand-border flex flex-col fixed h-full z-40 transition-all duration-300 overflow-hidden"
             >
-                <div className="p-6 flex items-center justify-between">
-                    <div className={`flex items-center gap-3 ${!isSidebarOpen && 'justify-center w-full'}`}>
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-200">
-                            <BookOpen className="w-6 h-6 text-white" />
-                        </div>
-                        {isSidebarOpen && <span className="font-bold text-xl tracking-tight text-gray-900">EduPro</span>}
+                <div className="p-8 pb-10 flex items-center shrink-0">
+                    <div className="w-10 h-10 bg-brand-primary rounded-xl flex items-center justify-center text-white font-black text-2xl shadow-premium">
+                        F
                     </div>
+                    <span className="ml-4 font-black text-xl text-brand-text tracking-tighter">OPERATOR</span>
                 </div>
 
-                <div className="flex-1 px-4 py-8 space-y-2">
+                <nav className="flex-1 px-4 space-y-2 overflow-y-auto">
                     {menuItems.map((item) => (
                         <button
                             key={item.id}
                             onClick={() => setActiveTab(item.id)}
-                            className={`w-full flex items-center p-3.5 rounded-2xl transition-all duration-300 group relative overflow-hidden ${activeTab === item.id
-                                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200'
-                                : 'text-gray-500 hover:bg-white hover:shadow-sm hover:text-indigo-600'
+                            className={`w-full flex items-center p-4 rounded-2xl transition-all group ${activeTab === item.id
+                                ? 'bg-brand-primary/10 text-brand-primary border border-brand-primary/20 shadow-xl'
+                                : 'text-brand-muted hover:bg-brand-surface-hover hover:text-brand-text'
                                 }`}
                         >
-                            <item.icon className={`w-5 h-5 flex-shrink-0 relative z-10 ${activeTab === item.id ? 'text-white' : 'text-gray-400 group-hover:text-indigo-600'}`} />
-                            {isSidebarOpen && <span className="ml-3 font-medium text-sm relative z-10">{item.label}</span>}
+                            <item.icon className="w-5 h-5 shrink-0" />
+                            <span className="ml-4 font-black text-xs uppercase tracking-widest">{item.label}</span>
                         </button>
                     ))}
-                </div>
+                </nav>
 
-                <div className="p-4 border-t border-gray-100">
-                    <button onClick={logout} className="w-full flex items-center p-3 rounded-2xl text-gray-500 hover:bg-red-50 hover:text-red-500 transition-all duration-300 group">
-                        <LogOut className="w-5 h-5 group-hover:rotate-180 transition-transform duration-500" />
-                        {isSidebarOpen && <span className="ml-3 font-medium text-sm">Logout</span>}
+                <div className="p-6 border-t border-brand-border">
+                    <div className="bg-brand-surface-hover rounded-3xl p-4 mb-4 border border-brand-border">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full border border-brand-primary/30 p-0.5">
+                                <img src={profile.profilePicture || "https://api.dicebear.com/7.x/notionists/svg?seed=Teacher"} className="w-full h-full rounded-full" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <p className="text-xs font-black text-brand-text truncate uppercase tracking-tight">{profile.username}</p>
+                                <p className="text-[10px] text-brand-muted font-bold uppercase tracking-widest">Master Operator</p>
+                            </div>
+                        </div>
+                    </div>
+                    <button onClick={logout} className="w-full flex items-center p-3.5 rounded-2xl text-red-500 hover:bg-red-500/5 transition-all group">
+                        <LogOut className="w-5 h-5" />
+                        <span className="ml-3 font-black text-xs tracking-widest">TERMINATE SESSION</span>
                     </button>
                 </div>
             </motion.aside>
 
             {/* Main Content */}
-            <main className="flex-1 overflow-y-auto relative z-10">
-                {/* Header */}
-                <header className="sticky top-0 bg-[#f8fafc]/80 backdrop-blur-md z-30 px-8 py-5 flex items-center justify-between">
-                    <div>
-                        <h2 className="text-2xl font-bold text-gray-800">
-                            {activeTab === 'overview' ? 'Instructor Dashboard' :
-                                activeTab === 'my-courses' ? 'My Courses' :
-                                    activeTab === 'analytics' ? 'Analytics' :
-                                        activeTab === 'wallet' ? 'Earnings & Wallet' :
-                                            'Settings'}
+            <div className={`flex-1 ${isSidebarOpen ? 'ml-[280px]' : 'ml-0'} transition-all duration-300 flex flex-col min-h-screen relative z-10`}>
+                {/* Topbar */}
+                <header className="h-24 bg-brand-surface/60 backdrop-blur-2xl sticky top-0 z-30 border-b border-brand-border px-10 flex items-center justify-between">
+                    <div className="flex items-center gap-6">
+                        <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2.5 bg-brand-surface rounded-xl border border-brand-border text-brand-muted hover:text-brand-text transition-all">
+                            <Layout className="w-5 h-5" />
+                        </button>
+                        <h2 className="text-2xl font-black text-brand-text tracking-tight uppercase italic underline decoration-brand-primary decoration-4 underline-offset-8">
+                            {menuItems.find(i => i.id === activeTab)?.label}
                         </h2>
-                        <p className="text-gray-500 text-sm">Welcome back, Instructor</p>
                     </div>
 
-                    <div className="flex items-center gap-4">
-                        <button className="p-2.5 rounded-full bg-white border border-gray-100 text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition-colors relative">
-                            <Bell className="w-5 h-5" />
-                            <span className="absolute top-2 right-2.5 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
+                    <div className="flex items-center gap-6">
+                        <div className="hidden md:flex items-center bg-brand-surface border border-brand-border rounded-2xl px-4 py-2.5 w-64 shadow-xl focus-within:border-brand-primary/50 transition-all">
+                            <Search className="w-4 h-4 text-brand-muted" />
+                            <input type="text" placeholder="Access database..." className="bg-transparent border-none focus:outline-none text-sm ml-3 w-full text-brand-text placeholder-brand-muted" />
+                        </div>
+                        <button onClick={() => navigate('/create-course')} className="hidden lg:flex items-center gap-2 bg-brand-primary hover:bg-brand-primary/90 text-white px-6 py-2.5 rounded-2xl font-black text-xs tracking-widest transition-all shadow-premium">
+                            <Plus className="w-4 h-4" /> INITIATE SECTOR
                         </button>
-                        <div className="flex items-center gap-3 pl-4 border-l border-gray-200">
-                            <div className="text-right hidden md:block">
-                                <p className="text-sm font-bold text-gray-900">{profile.username || 'Instructor'}</p>
-                                <p className="text-xs text-gray-500">{profile.role === 'teacher' ? 'Instructor' : profile.role}</p>
+                        <button className="relative p-2.5 bg-brand-surface rounded-xl border border-brand-border text-brand-muted hover:text-brand-text transition-all shadow-lg">
+                            <Bell className="w-5 h-5" />
+                            <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-brand-primary rounded-full"></span>
+                        </button>
+                        <div className="flex items-center gap-4 pl-6 border-l border-brand-border">
+                            <div className="text-right hidden sm:block">
+                                <p className="text-brand-text font-black text-[10px] uppercase tracking-wider">{authUser?.username || 'Operator'}</p>
+                                <p className="text-brand-primary font-black text-[9px] uppercase tracking-widest italic">{authUser?.role || 'Imperial Tutor'}</p>
                             </div>
-                            <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.username || 'default'}`} alt="Profile" className="w-10 h-10 rounded-full border-2 border-white shadow-sm" />
+                            <img
+                                src={authUser?.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${authUser?.username || 'Felix'}`}
+                                className="w-12 h-12 rounded-xl border border-brand-border object-cover cursor-pointer hover:scale-110 transition-transform"
+                                alt="Operator"
+                                onClick={() => setActiveTab('settings')}
+                            />
                         </div>
                     </div>
                 </header>
 
-                <div className="p-8 max-w-7xl mx-auto">
-                    <motion.div
-                        key={activeTab}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.3 }}
-                    >
-                        {activeTab === 'overview' && <OverviewView />}
-                        {activeTab === 'my-courses' && <MyCoursesView />}
-                        {activeTab === 'analytics' && <AnalyticsView />}
-                        {activeTab === 'wallet' && <EarningsView />}
-                        {activeTab === 'settings' && <SettingsView />}
-                    </motion.div>
-                </div>
-            </main>
+                <main className="flex-1 p-10 overflow-y-auto">
+                    <AnimatePresence mode="wait">
+                        {activeTab === 'overview' && (
+                            <motion.div key="overview" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
+                                <OverviewView />
+                            </motion.div>
+                        )}
+                        {activeTab === 'imperial' && (
+                            <motion.div key="imperial" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 1.05 }}>
+                                <ImperialInterfaceView />
+                            </motion.div>
+                        )}
+                        {activeTab === 'my-courses' && (
+                            <motion.div key="my-courses" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
+                                <MyCoursesView />
+                            </motion.div>
+                        )}
+                        {activeTab === 'analytics' && (
+                            <motion.div key="analytics" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
+                                <AnalyticsView />
+                            </motion.div>
+                        )}
+                        {activeTab === 'wallet' && (
+                            <motion.div key="wallet" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
+                                <WalletView />
+                            </motion.div>
+                        )}
+                        {activeTab === 'settings' && (
+                            <motion.div key="settings" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
+                                <SettingsView />
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                </main>
+            </div>
         </div>
     );
 };

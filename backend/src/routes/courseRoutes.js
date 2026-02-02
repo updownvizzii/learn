@@ -7,7 +7,13 @@ const {
     getTeacherCourses,
     getCourseById,
     getEnrolledCourses,
-    enrollInCourse
+    enrollInCourse,
+    markLectureCompleted,
+    getCertificate,
+    getTeacherStats,
+    getStudentStats,
+    deleteCourse,
+    updateCourse
 } = require('../controllers/courseController');
 const { protect } = require('../middleware/auth');
 const upload = require('../middleware/upload');
@@ -16,50 +22,28 @@ const upload = require('../middleware/upload');
 router.get('/', getAllCourses);
 router.get('/my-courses', protect, getTeacherCourses);
 router.get('/enrolled', protect, getEnrolledCourses);
+router.get('/teacher-stats', protect, getTeacherStats);
+router.get('/student-stats', protect, getStudentStats);
 router.post('/', protect, createCourse);
 
 // Parameterized Routes (Must be at the bottom)
 router.get('/:id', getCourseById);
 router.post('/:id/enroll', protect, enrollInCourse);
+router.post('/:id/lectures/:lectureId/complete', protect, markLectureCompleted);
+router.get('/:id/certificate', protect, getCertificate);
+router.delete('/:id', protect, deleteCourse);
+router.put('/:id', protect, updateCourse);
+
+// Transcription routes
+const transcriptionController = require('../controllers/transcriptionController');
+router.post('/:courseId/lectures/:lectureId/transcribe', protect, transcriptionController.transcribeLecture);
+router.get('/:courseId/lectures/:lectureId/transcript', protect, transcriptionController.getLectureTranscript);
+router.post('/:courseId/transcribe-all', protect, transcriptionController.transcribeAllLectures);
 
 const cloudflareStream = require('../services/cloudflareStreamService');
 
-router.post('/upload', protect, upload.fields([{ name: 'video', maxCount: 1 }, { name: 'thumbnail', maxCount: 1 }]), async (req, res) => {
-    try {
-        const files = req.files;
-        const responseData = {};
-
-        const handleUpload = async (fieldName) => {
-            if (files[fieldName]) {
-                const file = files[fieldName][0];
-
-                // If it's a video, upload to Cloudflare Stream
-                if (fieldName === 'video') {
-                    const result = await cloudflareStream.uploadVideo(file.path, file.originalname);
-                    // Remove local file after successful upload
-                    fs.unlinkSync(file.path);
-                    return result.uid; // Store the Cloudflare Stream UID
-                } else {
-                    // For thumbnails, keep local
-                    return `/uploads/${file.filename}`;
-                }
-            }
-            return null;
-        };
-
-        if (files.video) {
-            responseData.videoUrl = await handleUpload('video');
-        }
-        if (files.thumbnail) {
-            responseData.thumbnailUrl = await handleUpload('thumbnail');
-        }
-
-        res.status(200).json(responseData);
-    } catch (error) {
-        console.error('Upload Error:', error);
-        res.status(500).json({ message: 'Upload failed: ' + error.message });
-    }
-});
+// Upload route removed in favor of UploadThing
+// See /api/uploadthing in server.js
 
 // Get video playback URL (with enrollment check)
 router.get('/:courseId/video/:videoUid', protect, async (req, res) => {

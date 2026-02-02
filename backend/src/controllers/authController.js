@@ -1,6 +1,7 @@
 const User = require('../models/User');
 const { generateAccessToken, generateRefreshToken } = require('../utils/generateTokens');
 const jwt = require('jsonwebtoken');
+const { awardXP, updateStreak } = require('./gamificationController');
 
 // @desc    Register a new user
 // @route   POST /api/auth/register
@@ -87,13 +88,22 @@ const login = async (req, res) => {
                 maxAge: 7 * 24 * 60 * 60 * 1000
             });
 
+            // Award daily login XP and update streak for students
+            let gamification = null;
+            if (user.role === 'student') {
+                const streakResult = await updateStreak(user._id);
+                const xpResult = await awardXP(user._id, 10, 'Daily Login');
+                gamification = { streakResult, xpResult };
+            }
+
             res.json({
                 _id: user._id,
                 username: user.username,
                 email: user.email,
                 role: user.role,
                 profilePicture: user.profilePicture,
-                accessToken
+                accessToken,
+                gamification
             });
         } else {
             res.status(401).json({ message: 'Invalid email or password' });

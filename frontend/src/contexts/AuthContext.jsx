@@ -147,13 +147,18 @@ export const AuthProvider = ({ children }) => {
         checkUserLoggedIn();
     }, []);
 
+    const updateUser = (userData) => {
+        setUser(prev => ({ ...prev, ...userData }));
+    };
+
     const value = {
         user,
         loading,
         error,
         login,
         register,
-        logout
+        logout,
+        updateUser
     };
 
     return (

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Layout,
@@ -17,35 +17,15 @@ import {
     FileText,
     Loader2
 } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { UploadButton } from '../utils/uploadthing';
 
-const CreateCourse = () => {
+const EditCourse = () => {
+    const { id: courseId } = useParams();
     const navigate = useNavigate();
     const [activeStep, setActiveStep] = useState(1);
     const [isSaving, setIsSaving] = useState(false);
-
-    // Pre-fill UPI ID from profile
-    React.useEffect(() => {
-        const fetchProfile = async () => {
-            try {
-                const token = localStorage.getItem('accessToken');
-                const response = await fetch('http://localhost:5000/api/auth/profile', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                const data = await response.json();
-                if (data.upiId) {
-                    setFormData(prev => ({ ...prev, upiId: data.upiId }));
-                }
-            } catch (error) {
-                console.error('Error fetching profile:', error);
-            }
-        };
-        fetchProfile();
-    }, []);
-
-    // Token needed for uploads
-    const token = localStorage.getItem('accessToken');
+    const [isLoading, setIsLoading] = useState(true);
 
     // Form State
     const [formData, setFormData] = useState({
@@ -60,19 +40,40 @@ const CreateCourse = () => {
         currency: 'INR',
         thumbnail: null,
         upiId: '',
-        sections: [
-            {
-                id: 1,
-                title: 'Introduction',
-                lectures: [
-                    { id: 1, title: 'Introduction to the Course', video: '', duration: '10:00', transcript: '', transcriptionStatus: 'pending' }
-                ]
-            }
-        ],
+        sections: [],
         learningObjectives: [''],
         requirements: [''],
         targetAudience: ['']
     });
+
+    const token = localStorage.getItem('accessToken');
+
+    // Fetch existing course data
+    useEffect(() => {
+        const fetchCourse = async () => {
+            try {
+                const response = await fetch(`http://localhost:5000/api/courses/${courseId}`);
+                if (!response.ok) throw new Error('Asset not found');
+                const data = await response.json();
+
+                // Ensure array fields have at least one empty string if they are empty
+                setFormData({
+                    ...data,
+                    learningObjectives: data.learningObjectives?.length ? data.learningObjectives : [''],
+                    requirements: data.requirements?.length ? data.requirements : [''],
+                    targetAudience: data.targetAudience?.length ? data.targetAudience : [''],
+                    price: data.price || '',
+                });
+            } catch (error) {
+                console.error('Fetch Error:', error);
+                alert('STRATEGIC FAILURE: Could not retrieve mission parameters.');
+                navigate('/teacher/dashboard');
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        fetchCourse();
+    }, [courseId, navigate]);
 
     const steps = [
         { id: 1, title: 'Basic Info', icon: Layout },
@@ -88,7 +89,7 @@ const CreateCourse = () => {
     // Curriculum Handlers
     const addSection = () => {
         const newSection = {
-            id: Date.now(),
+            id: Date.now().toString(),
             title: 'New Section',
             lectures: []
         };
@@ -96,13 +97,13 @@ const CreateCourse = () => {
     };
 
     const deleteSection = (sectionId) => {
-        setFormData(prev => ({ ...prev, sections: prev.sections.filter(s => s.id !== sectionId) }));
+        setFormData(prev => ({ ...prev, sections: prev.sections.filter(s => s.id !== sectionId && s._id !== sectionId) }));
     };
 
     const updateSectionTitle = (id, title) => {
         setFormData(prev => ({
             ...prev,
-            sections: prev.sections.map(s => s.id === id ? { ...s, title } : s)
+            sections: prev.sections.map(s => (s.id === id || s._id === id) ? { ...s, title } : s)
         }));
     };
 
@@ -110,10 +111,10 @@ const CreateCourse = () => {
         setFormData(prev => ({
             ...prev,
             sections: prev.sections.map(s => {
-                if (s.id === sectionId) {
+                if (s.id === sectionId || s._id === sectionId) {
                     return {
                         ...s,
-                        lectures: [...s.lectures, { id: Date.now(), title: 'New Lecture', video: '', duration: '0:00', transcript: '', transcriptionStatus: 'pending' }]
+                        lectures: [...s.lectures, { id: Date.now().toString(), title: 'New Lecture', video: '' }]
                     };
                 }
                 return s;
@@ -125,10 +126,10 @@ const CreateCourse = () => {
         setFormData(prev => ({
             ...prev,
             sections: prev.sections.map(s => {
-                if (s.id === sectionId) {
+                if (s.id === sectionId || s._id === sectionId) {
                     return {
                         ...s,
-                        lectures: s.lectures.map(l => l.id === lectureId ? { ...l, [field]: value } : l)
+                        lectures: s.lectures.map(l => (l.id === lectureId || l._id === lectureId) ? { ...l, [field]: value } : l)
                     };
                 }
                 return s;
@@ -156,18 +157,19 @@ const CreateCourse = () => {
     };
 
     // Transcription handler
-    const handleTranscribe = async (sectionId, lectureId, courseId = null) => {
+    const handleTranscribe = async (sectionId, lectureId) => {
         const token = localStorage.getItem('accessToken');
 
         // Update status to processing
         setFormData(prev => ({
             ...prev,
             sections: prev.sections.map(s => {
-                if (String(s.id) === String(sectionId) || String(s._id) === String(sectionId)) {
+                const sId = String(s._id || s.id);
+                if (sId === String(sectionId)) {
                     return {
                         ...s,
                         lectures: s.lectures.map(l => {
-                            const lId = String(l.id || l._id);
+                            const lId = String(l._id || l.id);
                             return lId === String(lectureId) ? { ...l, transcriptionStatus: 'processing' } : l;
                         })
                     };
@@ -177,32 +179,8 @@ const CreateCourse = () => {
         }));
 
         try {
-            // For saved courses, use the actual course ID from the route
-            const actualCourseId = courseId || 'temp';
-
-            if (actualCourseId === 'temp') {
-                alert('Please save the course first before transcribing lectures.');
-                // Reset status
-                setFormData(prev => ({
-                    ...prev,
-                    sections: prev.sections.map(s => {
-                        if (String(s.id) === String(sectionId) || String(s._id) === String(sectionId)) {
-                            return {
-                                ...s,
-                                lectures: s.lectures.map(l => {
-                                    const lId = String(l.id || l._id);
-                                    return lId === String(lectureId) ? { ...l, transcriptionStatus: 'pending' } : l;
-                                })
-                            };
-                        }
-                        return s;
-                    })
-                }));
-                return;
-            }
-
             const response = await fetch(
-                `http://localhost:5000/api/courses/${actualCourseId}/lectures/${lectureId}/transcribe`,
+                `http://localhost:5000/api/courses/${courseId}/lectures/${lectureId}/transcribe`,
                 {
                     method: 'POST',
                     headers: {
@@ -221,11 +199,12 @@ const CreateCourse = () => {
             setFormData(prev => ({
                 ...prev,
                 sections: prev.sections.map(s => {
-                    if (String(s.id) === String(sectionId) || String(s._id) === String(sectionId)) {
+                    const sId = String(s._id || s.id);
+                    if (sId === String(sectionId)) {
                         return {
                             ...s,
                             lectures: s.lectures.map(l => {
-                                const lId = String(l.id || l._id);
+                                const lId = String(l._id || l.id);
                                 return lId === String(lectureId) ? {
                                     ...l,
                                     transcript: data.transcript,
@@ -248,11 +227,12 @@ const CreateCourse = () => {
             setFormData(prev => ({
                 ...prev,
                 sections: prev.sections.map(s => {
-                    if (String(s.id) === String(sectionId) || String(s._id) === String(sectionId)) {
+                    const sId = String(s._id || s.id);
+                    if (sId === String(sectionId)) {
                         return {
                             ...s,
                             lectures: s.lectures.map(l => {
-                                const lId = String(l.id || l._id);
+                                const lId = String(l._id || l.id);
                                 return lId === String(lectureId) ? { ...l, transcriptionStatus: 'failed' } : l;
                             })
                         };
@@ -262,8 +242,6 @@ const CreateCourse = () => {
             }));
         }
     };
-
-    // handleFileUpload removed in favor of UploadThing
 
     const getVideoDuration = (url) => {
         return new Promise((resolve) => {
@@ -303,10 +281,14 @@ const CreateCourse = () => {
         setFormData(prev => ({
             ...prev,
             sections: prev.sections.map(s => {
-                if (String(s.id) === String(sectionId)) {
+                const sId = String(s._id || s.id);
+                if (sId === String(sectionId)) {
                     return {
                         ...s,
-                        lectures: s.lectures.map(l => String(l.id) === String(lectureId) ? { ...l, video: videoUrl, duration: duration } : l)
+                        lectures: s.lectures.map(l => {
+                            const lId = String(l._id || l.id);
+                            return lId === String(lectureId) ? { ...l, video: videoUrl, duration: duration } : l;
+                        })
                     };
                 }
                 return s;
@@ -333,28 +315,20 @@ const CreateCourse = () => {
     const handleSave = async () => {
         setIsSaving(true);
         try {
-            const token = localStorage.getItem('accessToken');
             if (!formData.title || formData.title.trim() === '') {
                 alert('Strategic failure: Mission Identifier (Course Title) is mandatory.');
                 setIsSaving(false);
                 return;
             }
 
-            if (!formData.category) {
-                alert('Strategic failure: Security Sector (Category) must be designated.');
-                setIsSaving(false);
-                return;
-            }
-
-            console.log('Publishing course with data:', formData);
             const payload = {
                 ...formData,
                 price: Number(formData.price) || 0,
                 duration: calculateTotalDuration(formData.sections)
             };
 
-            const response = await fetch('http://localhost:5000/api/courses', {
-                method: 'POST',
+            const response = await fetch(`http://localhost:5000/api/courses/${courseId}`, {
+                method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
@@ -364,17 +338,26 @@ const CreateCourse = () => {
 
             if (!response.ok) {
                 const errorData = await response.json();
-                throw new Error(errorData.message || 'Failed to create course');
+                throw new Error(errorData.message || 'Failed to update course');
             }
 
+            alert('ASSET MODIFIED: Secure protocols updated successfully.');
             navigate('/teacher/dashboard');
         } catch (error) {
-            console.error('Error creating course:', error);
+            console.error('Error updating course:', error);
             alert(`Strategic Failure: ${error.message}`);
         } finally {
             setIsSaving(false);
         }
     };
+
+    if (isLoading) {
+        return (
+            <div className="min-h-screen bg-brand-bg flex items-center justify-center transition-colors">
+                <div className="w-16 h-16 border-4 border-brand-primary border-t-transparent rounded-full animate-spin"></div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-brand-bg font-jakarta text-brand-text pb-20 selection:bg-brand-primary selection:text-white relative transition-colors">
@@ -391,21 +374,21 @@ const CreateCourse = () => {
                         <ArrowLeft className="w-5 h-5" />
                     </Link>
                     <div>
-                        <h1 className="text-2xl font-black text-brand-text italic tracking-tighter uppercase transition-colors">STRATEGIC ASSET DEPLOYMENT</h1>
+                        <h1 className="text-2xl font-black text-brand-text italic tracking-tighter uppercase transition-colors">TACTICAL ASSET RECONFIGURATION</h1>
                         <p className="text-[10px] font-black text-brand-muted uppercase tracking-widest transition-colors">Operator: {formData.author || 'Imperial Tutor'}</p>
                     </div>
                 </div>
                 <div className="flex items-center gap-6">
                     <div className="hidden md:block text-right">
-                        <p className="text-[10px] font-black text-brand-muted/60 uppercase tracking-widest">Draft Status</p>
-                        <p className="text-xs font-black text-brand-primary uppercase italic tracking-tighter">Secured & Encrypted</p>
+                        <p className="text-[10px] font-black text-brand-muted/60 uppercase tracking-widest">Modification Phase</p>
+                        <p className="text-xs font-black text-brand-primary uppercase italic tracking-tighter">Authorized Access Only</p>
                     </div>
                     <button
                         onClick={handleSave}
                         disabled={isSaving}
                         className={`flex items-center px-8 py-3.5 bg-brand-primary text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-premium hover:bg-brand-primary/90 transition-all ${isSaving ? 'opacity-50 cursor-not-allowed' : 'hover:-translate-y-0.5'}`}
                     >
-                        {isSaving ? 'UPLOADING...' : 'PUBLISH SECTOR'}
+                        {isSaving ? 'RECOGNIZING...' : 'UPDATE SECTOR'}
                     </button>
                 </div>
             </header>
@@ -455,7 +438,7 @@ const CreateCourse = () => {
                             <div className="p-10 sm:p-16 space-y-12">
                                 <div className="space-y-10">
                                     <div className="relative group">
-                                        <label className="block text-[10px] font-black text-brand-primary uppercase tracking-[0.4em] mb-4 transition-colors">Course Title</label>
+                                        <label className="block text-[10px] font-black text-brand-primary uppercase tracking-[0.4em] mb-4">Course Title</label>
                                         <input
                                             name="title"
                                             value={formData.title}
@@ -467,7 +450,7 @@ const CreateCourse = () => {
                                     </div>
 
                                     <div className="relative group">
-                                        <label className="block text-[10px] font-black text-brand-muted uppercase tracking-[0.4em] mb-4 transition-colors">Course Subtitle</label>
+                                        <label className="block text-[10px] font-black text-brand-muted uppercase tracking-[0.4em] mb-4">Course Subtitle</label>
                                         <input
                                             name="subtitle"
                                             value={formData.subtitle}
@@ -480,7 +463,7 @@ const CreateCourse = () => {
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                                         <div>
-                                            <label className="block text-[10px] font-black text-brand-muted uppercase tracking-[0.4em] mb-4 transition-colors">Security Sector (Category)</label>
+                                            <label className="block text-[10px] font-black text-brand-muted uppercase tracking-[0.4em] mb-4">Security Sector (Category)</label>
                                             <select
                                                 name="category"
                                                 value={formData.category}
@@ -493,7 +476,7 @@ const CreateCourse = () => {
                                             </select>
                                         </div>
                                         <div>
-                                            <label className="block text-[10px] font-black text-brand-muted uppercase tracking-[0.4em] mb-4 transition-colors">Clearance Level</label>
+                                            <label className="block text-[10px] font-black text-brand-muted uppercase tracking-[0.4em] mb-4">Clearance Level</label>
                                             <select
                                                 name="level"
                                                 value={formData.level}
@@ -508,7 +491,7 @@ const CreateCourse = () => {
                                     </div>
 
                                     <div>
-                                        <label className="block text-[10px] font-black text-brand-muted uppercase tracking-[0.4em] mb-4 transition-colors">Intel Briefing (Description)</label>
+                                        <label className="block text-[10px] font-black text-brand-muted uppercase tracking-[0.4em] mb-4">Intel Briefing (Description)</label>
                                         <textarea
                                             name="description"
                                             value={formData.description}
@@ -522,7 +505,7 @@ const CreateCourse = () => {
                                     {/* Lists */}
                                     {['learningObjectives', 'requirements', 'targetAudience'].map((field) => (
                                         <div key={field} className="space-y-6">
-                                            <label className="block text-[10px] font-black text-brand-primary uppercase tracking-[0.4em] transition-colors">
+                                            <label className="block text-[10px] font-black text-brand-primary uppercase tracking-[0.4em]">
                                                 {field === 'learningObjectives' ? 'STRATEGIC OUTCOMES' : field === 'requirements' ? 'TECHNICAL PREREQUISITES' : 'DESIGNATED OPERATORS'}
                                             </label>
                                             <div className="space-y-4">
@@ -553,7 +536,7 @@ const CreateCourse = () => {
                         {activeStep === 2 && (
                             <div className="p-10 sm:p-16 space-y-10 bg-brand-bg/50">
                                 {formData.sections.map((section, sIndex) => (
-                                    <div key={section.id} className="bg-brand-surface border border-brand-border rounded-[2.5rem] overflow-hidden group/sec hover:border-brand-primary/30 transition-all shadow-premium dark:shadow-premium-dark">
+                                    <div key={section._id || section.id} className="bg-brand-surface border border-brand-border rounded-[2.5rem] overflow-hidden group/sec hover:border-brand-primary/30 transition-all shadow-premium dark:shadow-premium-dark">
                                         <div className="bg-brand-surface/50 p-6 flex items-center gap-6 border-b border-brand-border">
                                             <div className="px-4 py-2 bg-brand-primary/10 border border-brand-primary/20 rounded-xl text-brand-primary text-[10px] font-black uppercase tracking-widest">
                                                 SECTION {sIndex + 1}
@@ -561,23 +544,23 @@ const CreateCourse = () => {
                                             <input
                                                 type="text"
                                                 value={section.title}
-                                                onChange={(e) => updateSectionTitle(section.id, e.target.value)}
+                                                onChange={(e) => updateSectionTitle(section._id || section.id, e.target.value)}
                                                 className="bg-transparent font-black text-brand-text italic uppercase tracking-tighter outline-none flex-grow text-lg transition-colors"
                                             />
-                                            <button onClick={() => deleteSection(section.id)} className="text-brand-muted hover:text-red-500 transition-colors">
+                                            <button onClick={() => deleteSection(section._id || section.id)} className="text-brand-muted hover:text-red-500 transition-colors">
                                                 <Trash2 className="w-5 h-5" />
                                             </button>
                                         </div>
                                         <div className="p-8 space-y-4">
                                             {section.lectures.map((lecture, lIndex) => (
-                                                <div key={lecture.id} className="flex items-center gap-6 p-5 rounded-[1.5rem] bg-brand-bg border border-brand-border hover:border-brand-primary/20 transition-all">
+                                                <div key={lecture._id || lecture.id} className="flex items-center gap-6 p-5 rounded-[1.5rem] bg-brand-bg border border-brand-border hover:border-brand-primary/20 transition-all">
                                                     <div className="w-8 h-8 rounded-lg bg-brand-primary/10 border border-brand-primary/20 flex items-center justify-center text-brand-primary font-black text-xs">
                                                         {lIndex + 1}
                                                     </div>
                                                     <input
                                                         type="text"
                                                         value={lecture.title}
-                                                        onChange={(e) => updateLecture(section.id, lecture.id, 'title', e.target.value)}
+                                                        onChange={(e) => updateLecture(section._id || section.id, lecture._id || lecture.id, 'title', e.target.value)}
                                                         placeholder="UNNAMED_INTEL_STREAM"
                                                         className="flex-grow bg-transparent outline-none text-brand-text font-bold placeholder:text-brand-muted/20 uppercase text-sm tracking-tight transition-colors"
                                                     />
@@ -586,7 +569,7 @@ const CreateCourse = () => {
                                                             <div className="flex items-center gap-3 bg-brand-primary/10 px-4 py-2 rounded-xl border border-brand-primary/30">
                                                                 <CheckCircle className="w-4 h-4 text-brand-primary" />
                                                                 <span className="text-[10px] font-black text-brand-primary uppercase tracking-widest">ENCRYPTED</span>
-                                                                <button onClick={() => updateLecture(section.id, lecture.id, 'video', '')} className="text-brand-muted hover:text-red-500 transition-colors">
+                                                                <button onClick={() => updateLecture(section._id || section.id, lecture._id || lecture.id, 'video', '')} className="text-brand-muted hover:text-red-500 transition-colors">
                                                                     <Trash2 className="w-4 h-4" />
                                                                 </button>
                                                             </div>
@@ -605,7 +588,7 @@ const CreateCourse = () => {
                                                                         button: "bg-brand-primary font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-brand-primary/90 transition-all shadow-premium dark:shadow-premium-dark px-6 py-3 border-none",
                                                                         allowedContent: "text-brand-muted text-[9px] font-black uppercase tracking-widest mt-1"
                                                                     }}
-                                                                    onClientUploadComplete={(res) => handleVideoUploadComplete(section.id, lecture.id, res)}
+                                                                    onClientUploadComplete={(res) => handleVideoUploadComplete(section._id || section.id, lecture._id || lecture.id, res)}
                                                                     onUploadError={(error) => {
                                                                         console.error('Upload Error:', error);
                                                                         alert(`Strategic Failure: ${error.message}`);
@@ -624,7 +607,7 @@ const CreateCourse = () => {
                                                         )}
                                                         {lecture.video && (
                                                             <button
-                                                                onClick={() => handleTranscribe(section.id, lecture.id)}
+                                                                onClick={() => handleTranscribe(section._id || section.id, lecture._id || lecture.id)}
                                                                 disabled={lecture.transcriptionStatus === 'processing'}
                                                                 className={`flex items-center gap-2 px-3 py-1 rounded-lg ml-3 text-[10px] font-black uppercase tracking-widest transition-all ${lecture.transcriptionStatus === 'completed'
                                                                     ? 'bg-green-600/20 border border-green-500/30 text-green-400 hover:bg-green-600/30'
@@ -657,7 +640,7 @@ const CreateCourse = () => {
                                                 </div>
                                             ))}
                                             <button
-                                                onClick={() => addLecture(section.id)}
+                                                onClick={() => addLecture(section._id || section.id)}
                                                 className="w-full py-5 border-2 border-dashed border-brand-border rounded-[1.5rem] text-brand-muted font-black text-[10px] uppercase tracking-[0.3em] hover:border-brand-primary/40 hover:text-brand-primary transition-all flex items-center justify-center gap-3"
                                             >
                                                 <Plus className="w-4 h-4" /> Inject Intelligence Node
@@ -799,8 +782,8 @@ const CreateCourse = () => {
                                         )}
 
                                         {formData.isFree && (
-                                            <div className="p-8 rounded-[2rem] bg-blue-600/5 border border-blue-500/10 shadow-inner">
-                                                <p className="text-[10px] text-blue-500 font-black uppercase tracking-[0.3em] leading-relaxed">
+                                            <div className="p-8 rounded-[2rem] bg-brand-primary/5 border border-brand-primary/10 shadow-inner">
+                                                <p className="text-[10px] text-brand-primary font-black uppercase tracking-[0.3em] leading-relaxed">
                                                     // Sector cleared for public distribution. Mission designated for global visibility.
                                                 </p>
                                             </div>
@@ -811,33 +794,28 @@ const CreateCourse = () => {
                         )}
 
                         {/* Navigation Footer */}
-                        <div className="px-10 sm:px-16 py-10 border-t border-[#1F1F1F] flex justify-between items-center bg-[#050505]">
+                        <div className="px-10 sm:px-16 py-10 border-t border-brand-border flex justify-between items-center bg-brand-bg/80 transition-all">
                             <button
                                 onClick={() => setActiveStep(prev => Math.max(1, prev - 1))}
                                 disabled={activeStep === 1}
-                                className={`font-black uppercase text-[10px] tracking-[0.3em] text-zinc-600 hover:text-white transition-all ${activeStep === 1 ? 'opacity-0 pointer-events-none' : ''}`}
+                                className="flex items-center gap-3 px-8 py-4 bg-brand-surface border border-brand-border rounded-2xl text-brand-text font-black text-[10px] uppercase tracking-widest hover:border-brand-primary/40 transition-all disabled:opacity-30 disabled:cursor-not-allowed group"
                             >
-                                Revert Phase
+                                <ChevronRight className="w-4 h-4 rotate-180 group-hover:-translate-x-1 transition-transform" /> Back
                             </button>
-
-                            <div className="flex gap-6">
-                                {activeStep < 3 ? (
-                                    <button
-                                        onClick={() => setActiveStep(prev => Math.min(3, prev + 1))}
-                                        className="flex items-center gap-3 px-12 py-5 bg-white text-black rounded-2xl font-black text-[10px] uppercase tracking-[0.4em] hover:bg-blue-600 hover:text-white transition-all shadow-xl"
-                                    >
-                                        Advancement Core <ChevronRight className="w-4 h-4" />
-                                    </button>
-                                ) : (
-                                    <button
-                                        onClick={handleSave}
-                                        disabled={isSaving}
-                                        className="flex items-center gap-3 px-12 py-5 bg-blue-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.4em] shadow-[0_0_40px_rgba(37,99,235,0.5)] hover:bg-blue-500 transition-all"
-                                    >
-                                        <Save className="w-4 h-4" /> Final Deployment
-                                    </button>
-                                )}
-                            </div>
+                            <button
+                                onClick={() => setActiveStep(prev => Math.min(3, prev + 1))}
+                                className={`flex items-center gap-3 px-8 py-4 bg-brand-primary text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-brand-primary/90 transition-all shadow-premium group ${activeStep === 3 ? 'hidden' : ''}`}
+                            >
+                                Next Phase <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                            </button>
+                            {activeStep === 3 && (
+                                <button
+                                    onClick={handleSave}
+                                    className="flex items-center gap-3 px-12 py-4 bg-brand-primary text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-brand-primary/90 transition-all shadow-premium"
+                                >
+                                    <Save className="w-4 h-4" /> Finalize Sector
+                                </button>
+                            )}
                         </div>
                     </motion.div>
                 </AnimatePresence>
@@ -846,4 +824,4 @@ const CreateCourse = () => {
     );
 };
 
-export default CreateCourse;
+export default EditCourse;

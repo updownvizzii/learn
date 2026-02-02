@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import AuthLayout from '../components/layouts/AuthLayout';
 import { Key, Mail, Lock, User, GraduationCap, School } from 'lucide-react';
+import { useGamification } from '../components/GamificationProvider';
 
 const SharedLogin = () => {
     const [isLogin, setIsLogin] = useState(true);
@@ -18,6 +19,7 @@ const SharedLogin = () => {
     const [error, setError] = useState('');
 
     const { login, register } = useAuth();
+    const { handleGamificationResult } = useGamification();
     const navigate = useNavigate();
 
     const handleChange = (e) => {
@@ -30,11 +32,20 @@ const SharedLogin = () => {
         setLoading(true);
 
         try {
+            let userData;
             if (isLogin) {
-                await login(formData.email, formData.password, role);
+                userData = await login(formData.email, formData.password, role);
             } else {
-                await register(formData.username, formData.email, formData.password, role, formData.code);
+                userData = await register(formData.username, formData.email, formData.password, role, formData.code);
             }
+
+            // Handle Gamification Result on Login
+            if (userData && userData.gamification) {
+                const { streakResult, xpResult } = userData.gamification;
+                if (xpResult) handleGamificationResult(xpResult);
+                // streakResult can also be handled if needed
+            }
+
             navigate(role === 'teacher' ? '/teacher/dashboard' : '/student/dashboard');
         } catch (err) {
             setError(err.message || 'Failed to authenticate');
@@ -49,15 +60,15 @@ const SharedLogin = () => {
             subtitle={isLogin ? "Welcome back! Please sign in to continue." : "Create an account to get started."}
         >
             {/* Role Toggle */}
-            <div className="flex justify-center mb-8 bg-slate-100 p-1 rounded-lg">
+            <div className="flex justify-center mb-10 bg-brand-bg p-1.5 rounded-2xl border border-brand-border shadow-inner">
                 <button
                     onClick={() => setRole('student')}
-                    className={`flex-1 flex items-center justify-center py-2 px-4 rounded-md text-sm font-medium transition-all duration-200 ${role === 'student'
-                        ? 'bg-white text-indigo-600 shadow-sm'
-                        : 'text-slate-500 hover:text-indigo-600'
+                    className={`flex-1 flex items-center justify-center py-3 px-6 rounded-xl text-xs font-black uppercase tracking-widest transition-all duration-300 ${role === 'student'
+                        ? 'bg-brand-primary text-white shadow-premium scale-[1.02]'
+                        : 'text-brand-muted hover:text-brand-text hover:bg-brand-primary/5'
                         }`}
                 >
-                    <GraduationCap className="w-4 h-4 mr-2" />
+                    <GraduationCap className={`w-4 h-4 mr-2 ${role === 'student' ? 'text-white' : 'text-brand-muted'}`} />
                     Student
                 </button>
                 <button
@@ -65,12 +76,12 @@ const SharedLogin = () => {
                         setRole('teacher');
                         setIsLogin(true); // Teachers cannot sign up here
                     }}
-                    className={`flex-1 flex items-center justify-center py-2 px-4 rounded-md text-sm font-medium transition-all duration-200 ${role === 'teacher'
-                        ? 'bg-white text-indigo-600 shadow-sm'
-                        : 'text-slate-500 hover:text-indigo-600'
+                    className={`flex-1 flex items-center justify-center py-3 px-6 rounded-xl text-xs font-black uppercase tracking-widest transition-all duration-300 ${role === 'teacher'
+                        ? 'bg-brand-primary text-white shadow-premium scale-[1.02]'
+                        : 'text-brand-muted hover:text-brand-text hover:bg-brand-primary/5'
                         }`}
                 >
-                    <School className="w-4 h-4 mr-2" />
+                    <School className={`w-4 h-4 mr-2 ${role === 'teacher' ? 'text-white' : 'text-brand-muted'}`} />
                     Teacher
                 </button>
             </div>
@@ -82,15 +93,14 @@ const SharedLogin = () => {
                         initial={{ opacity: 0, y: -10 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -10 }}
-                        className="mb-4 bg-red-50 border-l-4 border-red-500 p-4 text-red-700"
+                        className="mb-6 bg-red-500/10 border border-red-500/20 p-4 rounded-xl text-red-500 text-[10px] font-black uppercase tracking-widest text-center"
                     >
-                        <p className="text-sm">{error}</p>
+                        <p>{error}</p>
                     </motion.div>
                 )}
             </AnimatePresence>
 
             <form onSubmit={handleSubmit} className="space-y-6">
-                {/* Signup Fields */}
                 <AnimatePresence mode='popLayout'>
                     {!isLogin && (
                         <motion.div
@@ -98,17 +108,18 @@ const SharedLogin = () => {
                             animate={{ opacity: 1, height: 'auto' }}
                             exit={{ opacity: 0, height: 0 }}
                             transition={{ duration: 0.2 }}
+                            className="mb-4"
                         >
-                            <label className="block text-sm font-medium text-slate-700">Full Name</label>
-                            <div className="mt-1 relative rounded-md shadow-sm">
-                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                    <User className="h-5 w-5 text-slate-400" />
+                            <label className="block text-[10px] font-black text-brand-muted uppercase tracking-widest mb-2 transition-colors">Full Name</label>
+                            <div className="relative group">
+                                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                    <User className="h-5 w-5 text-brand-muted group-focus-within:text-brand-primary transition-colors" />
                                 </div>
                                 <input
                                     type="text"
                                     name="username"
                                     required={!isLogin}
-                                    className="block w-full pl-10 pr-3 py-2 border border-slate-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                                    className="w-full bg-brand-bg border border-brand-border rounded-2xl pl-12 pr-4 py-4 text-brand-text placeholder-brand-muted/40 outline-none focus:border-brand-primary/50 transition-all font-bold text-sm"
                                     placeholder="John Doe"
                                     value={formData.username}
                                     onChange={handleChange}
@@ -119,17 +130,17 @@ const SharedLogin = () => {
                 </AnimatePresence>
 
                 {/* Email */}
-                <div>
-                    <label className="block text-sm font-medium text-slate-700">Email Address</label>
-                    <div className="mt-1 relative rounded-md shadow-sm">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <Mail className="h-5 w-5 text-slate-400" />
+                <div className="mb-4">
+                    <label className="block text-[10px] font-black text-brand-muted uppercase tracking-widest mb-2 transition-colors">Email Address</label>
+                    <div className="relative group">
+                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                            <Mail className="h-5 w-5 text-brand-muted group-focus-within:text-brand-primary transition-colors" />
                         </div>
                         <input
                             type="email"
                             name="email"
                             required
-                            className="block w-full pl-10 pr-3 py-2 border border-slate-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                            className="w-full bg-brand-bg border border-brand-border rounded-2xl pl-12 pr-4 py-4 text-brand-text placeholder-brand-muted/40 outline-none focus:border-brand-primary/50 transition-all font-bold text-sm"
                             placeholder="you@example.com"
                             value={formData.email}
                             onChange={handleChange}
@@ -138,17 +149,17 @@ const SharedLogin = () => {
                 </div>
 
                 {/* Password */}
-                <div>
-                    <label className="block text-sm font-medium text-slate-700">Password</label>
-                    <div className="mt-1 relative rounded-md shadow-sm">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <Lock className="h-5 w-5 text-slate-400" />
+                <div className="mb-6">
+                    <label className="block text-[10px] font-black text-brand-muted uppercase tracking-widest mb-2 transition-colors">Password</label>
+                    <div className="relative group">
+                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                            <Lock className="h-5 w-5 text-brand-muted group-focus-within:text-brand-primary transition-colors" />
                         </div>
                         <input
                             type="password"
                             name="password"
                             required
-                            className="block w-full pl-10 pr-3 py-2 border border-slate-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                            className="w-full bg-brand-bg border border-brand-border rounded-2xl pl-12 pr-4 py-4 text-brand-text placeholder-brand-muted/40 outline-none focus:border-brand-primary/50 transition-all font-bold text-sm"
                             placeholder="••••••••"
                             value={formData.password}
                             onChange={handleChange}
@@ -159,57 +170,59 @@ const SharedLogin = () => {
                 {/* Teacher Code Removed as per request */}
 
                 <div>
-                    <button
+                    <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
                         type="submit"
                         disabled={loading}
-                        className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200"
+                        className="w-full flex justify-center items-center py-4 px-6 bg-brand-primary text-white text-[10px] font-black uppercase tracking-[0.3em] rounded-2xl hover:bg-brand-primary/90 transition-all shadow-premium relative overflow-hidden group disabled:opacity-50"
                     >
-                        {loading ? 'Processing...' : (isLogin ? 'Sign In' : 'Create Account')}
-                    </button>
+                        {loading ? 'SYNCING...' : (isLogin ? 'Initiate Uplink' : 'Initialize Sync')}
+                    </motion.button>
                 </div>
             </form>
 
             <div className="mt-6">
                 <div className="relative">
                     <div className="absolute inset-0 flex items-center">
-                        <div className="w-full border-t border-slate-300" />
+                        <div className="w-full border-t border-brand-border" />
                     </div>
                     <div className="relative flex justify-center text-sm">
-                        <span className="px-2 bg-white text-slate-500">
+                        <span className="px-2 bg-brand-card text-brand-text/70">
                             Or continue with
                         </span>
                     </div>
                 </div>
 
-                <div className="mt-6 grid grid-cols-1 gap-3">
-                    <button
+                <div className="mt-8 grid grid-cols-1 gap-4">
+                    <motion.button
+                        whileHover={{ y: -2 }}
                         type="button"
-                        className="w-full inline-flex justify-center py-2 px-4 border border-slate-300 rounded-md shadow-sm bg-white text-sm font-medium text-slate-500 hover:bg-slate-50"
+                        className="w-full flex justify-center items-center py-4 px-6 border border-brand-border rounded-2xl bg-brand-bg text-[10px] font-black uppercase tracking-widest text-brand-text hover:bg-brand-surface transition-all group"
                     >
-                        <span className="sr-only">Sign in with Google</span>
-                        <svg className="w-5 h-5" aria-hidden="true" fill="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-5 h-5 mr-3" aria-hidden="true" fill="currentColor" viewBox="0 0 24 24">
                             <path d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z" />
                         </svg>
-                        <span className="ml-2">Google</span>
-                    </button>
+                        Google Sync
+                    </motion.button>
                 </div>
             </div>
 
-            <div className="mt-6 text-center">
-                <p className="text-sm text-slate-600">
+            <div className="mt-8 text-center transition-colors">
+                <p className="text-[10px] font-black text-brand-muted uppercase tracking-widest">
                     {role === 'student' ? (
                         <>
-                            {isLogin ? "Don't have an account? " : "Already have an account? "}
+                            {isLogin ? "NO PROTOCOL SYNC? " : "ALREADY SYNCED? "}
                             <button
                                 onClick={() => setIsLogin(!isLogin)}
-                                className="font-medium text-indigo-600 hover:text-indigo-500"
+                                className="text-brand-primary hover:text-brand-secondary underline decoration-2 underline-offset-4 decoration-brand-primary/30 transition-all ml-2"
                             >
-                                {isLogin ? 'Sign up' : 'Log in'}
+                                {isLogin ? 'INITIALIZE ACCOUNT' : 'ACCESS COMMAND'}
                             </button>
                         </>
                     ) : (
-                        <span className="text-slate-500 italic">
-                            Teacher accounts are created by Administrators.
+                        <span className="text-brand-muted/60 italic">
+                            TEACHER NODES REQUIRE OVERSEER CLEARANCE.
                         </span>
                     )}
                 </p>

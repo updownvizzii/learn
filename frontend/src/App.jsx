@@ -12,36 +12,42 @@ import Courses from './pages/Courses';
 import CourseDetail from './pages/CourseDetail';
 import TeacherDashboard from './pages/TeacherDashboard';
 import CreateCourse from './pages/CreateCourse';
+import EditCourse from './pages/EditCourse';
 import AdminDashboard from './pages/AdminDashboard';
+
+import GamificationProvider from './components/GamificationProvider';
 
 function App() {
   return (
     <AuthProvider>
-      <Routes>
-        <Route path="/" element={<Landing />} />
-        <Route path="/login" element={<SharedLogin />} />
-        <Route path="/admin/login" element={<AdminLogin />} />
-        <Route path="/auth/success" element={<AuthSuccess />} />
-        <Route path="/courses" element={<Courses />} />
-        <Route path="/courses/:id" element={<CourseDetail />} />
+      <GamificationProvider>
+        <Routes>
+          <Route path="/" element={<Landing />} />
+          <Route path="/login" element={<SharedLogin />} />
+          <Route path="/admin/login" element={<AdminLogin />} />
+          <Route path="/auth/success" element={<AuthSuccess />} />
+          <Route path="/courses" element={<Courses />} />
+          <Route path="/courses/:id" element={<CourseDetail />} />
 
-        {/* Protected Routes */}
-        <Route element={<ProtectedRoute allowedRoles={['student']} />}>
-          <Route path="/student/dashboard" element={<Dashboard />} />
-        </Route>
+          {/* Protected Routes */}
+          <Route element={<ProtectedRoute allowedRoles={['student']} />}>
+            <Route path="/student/dashboard" element={<Dashboard />} />
+          </Route>
 
-        <Route element={<ProtectedRoute allowedRoles={['teacher']} />}>
-          <Route path="/teacher/dashboard" element={<TeacherDashboard />} />
-          <Route path="/teacher/create-course" element={<CreateCourse />} />
-        </Route>
+          <Route element={<ProtectedRoute allowedRoles={['teacher']} />}>
+            <Route path="/teacher/dashboard" element={<TeacherDashboard />} />
+            <Route path="/teacher/create-course" element={<CreateCourse />} />
+            <Route path="/teacher/edit-course/:id" element={<EditCourse />} />
+          </Route>
 
-        <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
-          <Route path="/admin/dashboard" element={<AdminDashboard />} />
-        </Route>
+          <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
+            <Route path="/admin/dashboard" element={<AdminDashboard />} />
+          </Route>
 
-        {/* Catch all */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+          {/* Catch all */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </GamificationProvider>
     </AuthProvider>
   );
 }
