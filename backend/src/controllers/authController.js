@@ -88,12 +88,11 @@ const login = async (req, res) => {
                 maxAge: 7 * 24 * 60 * 60 * 1000
             });
 
-            // Award daily login XP and update streak for students
+            // Award daily login XP for students
             let gamification = null;
             if (user.role === 'student') {
-                const streakResult = await updateStreak(user._id);
                 const xpResult = await awardXP(user._id, 10, 'Daily Login');
-                gamification = { streakResult, xpResult };
+                gamification = { xpResult };
             }
 
             res.json({
@@ -164,7 +163,12 @@ const getProfile = async (req, res) => {
             profilePicture: user.profilePicture,
             upiId: user.upiId,
             bio: user.bio,
-            expertise: user.expertise
+            expertise: user.expertise,
+            preloaderText: user.preloaderText,
+            preloaderImage: user.preloaderImage,
+            streak: user.streak,
+            level: user.level,
+            xp: user.xp
         });
     } else {
         res.status(404).json({ message: 'User not found' });
@@ -184,6 +188,8 @@ const updateProfile = async (req, res) => {
             user.upiId = req.body.upiId || user.upiId;
             user.bio = req.body.bio || user.bio;
             user.expertise = req.body.expertise || user.expertise;
+            user.preloaderText = req.body.preloaderText !== undefined ? req.body.preloaderText : user.preloaderText;
+            user.preloaderImage = req.body.preloaderImage !== undefined ? req.body.preloaderImage : user.preloaderImage;
 
             const updatedUser = await user.save();
 
@@ -204,11 +210,24 @@ const updateProfile = async (req, res) => {
     }
 };
 
+const getBranding = async (req, res) => {
+    try {
+        const teacher = await User.findOne({ role: 'teacher' }).select('preloaderText preloaderImage');
+        res.json({
+            preloaderText: teacher?.preloaderText || '',
+            preloaderImage: teacher?.preloaderImage || ''
+        });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
 module.exports = {
     register,
     login,
     logout,
     refresh,
     getProfile,
-    updateProfile
+    updateProfile,
+    getBranding
 };

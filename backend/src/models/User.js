@@ -45,6 +45,14 @@ const userSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  preloaderText: {
+    type: String,
+    default: ''
+  },
+  preloaderImage: {
+    type: String,
+    default: ''
+  },
 
   // Student specific fields
   enrolledCourses: [{

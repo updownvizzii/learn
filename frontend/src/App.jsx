@@ -14,6 +14,7 @@ import TeacherDashboard from './pages/TeacherDashboard';
 import CreateCourse from './pages/CreateCourse';
 import EditCourse from './pages/EditCourse';
 import AdminDashboard from './pages/AdminDashboard';
+import Preloader from './components/Preloader';
 
 import GamificationProvider from './components/GamificationProvider';
 
@@ -21,6 +22,7 @@ function App() {
   return (
     <AuthProvider>
       <GamificationProvider>
+        <Preloader />
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<SharedLogin />} />

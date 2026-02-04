@@ -17,7 +17,8 @@ import {
     MoreVertical,
     Grid,
     List,
-    Trophy
+    Trophy,
+    Zap
 } from 'lucide-react';
 import { LeaderboardCard } from '../components/GamificationUI';
 import { useNavigate } from 'react-router-dom';
@@ -106,10 +107,10 @@ const Dashboard = () => {
                 if (statsData) {
                     setFullStats(statsData);
                     setStats([
-                        { label: 'Active Sectors', value: statsData.enrolledCourses?.toString() || '0', icon: BookOpen },
-                        { label: 'Sync Time', value: statsData.hoursLearned?.toString() || '0', icon: Clock },
-                        { label: 'Clearance Cards', value: statsData.certificatesEarned?.toString() || '0', icon: Award },
-                        { label: 'Sync Progress', value: `${statsData.avgProgress || 0}%`, icon: TrendingUp },
+                        { label: 'Enrolled Sectors', value: statsData.enrolledCourses?.toString() || '0', icon: BookOpen },
+                        { label: 'Operations Uptime', value: `${statsData.hoursLearned || 0}h`, icon: Clock },
+                        { label: 'Elite Streak', value: `${statsData.streak || 0} Days`, icon: Zap },
+                        { label: 'Sector Mastery', value: `${statsData.avgProgress || 0}%`, icon: TrendingUp },
                     ]);
                 }
 
@@ -742,9 +743,13 @@ const Dashboard = () => {
                                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
                                     {/* Activity Chart */}
                                     <div className="bg-brand-surface p-8 rounded-[2.5rem] shadow-premium border border-brand-border glimmer transition-all">
-                                        <h3 className="text-lg font-black text-brand-text mb-8 flex items-center gap-3 uppercase tracking-widest italic transition-colors">
-                                            <Clock className="w-5 h-5 text-brand-primary" /> Operational Uptime
-                                        </h3>
+                                        <div className="flex items-center justify-between mb-8">
+                                            <div>
+                                                <h3 className="text-lg font-black text-brand-text uppercase tracking-widest italic transition-colors">Learning Consistency</h3>
+                                                <p className="text-[10px] text-brand-muted font-black uppercase tracking-widest mt-1">// Operational uptime per 24h cycle</p>
+                                            </div>
+                                            <Clock className="w-5 h-5 text-brand-primary opacity-50" />
+                                        </div>
                                         <div className="h-80">
                                             <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                                                 <AreaChart data={activityData}>
@@ -766,16 +771,20 @@ const Dashboard = () => {
 
                                     {/* Skills Radar */}
                                     <div className="bg-brand-surface p-8 rounded-[2.5rem] shadow-premium border border-brand-border glimmer transition-all">
-                                        <h3 className="text-lg font-black text-brand-text mb-8 flex items-center gap-3 uppercase tracking-widest italic transition-colors">
-                                            <TrendingUp className="w-5 h-5 text-brand-primary" /> Skill Domination
-                                        </h3>
+                                        <div className="flex items-center justify-between mb-8">
+                                            <div>
+                                                <h3 className="text-lg font-black text-brand-text uppercase tracking-widest italic transition-colors">Proficiency Matrix</h3>
+                                                <p className="text-[10px] text-brand-muted font-black uppercase tracking-widest mt-1">// Strategic skill domination levels</p>
+                                            </div>
+                                            <TrendingUp className="w-5 h-5 text-brand-primary opacity-50" />
+                                        </div>
                                         <div className="h-80 flex items-center justify-center">
                                             <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                                                 <RadarChart cx="50%" cy="50%" outerRadius="80%" data={skillsData}>
                                                     <PolarGrid stroke="var(--color-border)" />
                                                     <PolarAngleAxis dataKey="subject" tick={{ fill: 'var(--color-muted)', fontSize: 10, fontWeight: 800 }} />
-                                                    <PolarRadiusAxis angle={30} domain={[0, 150]} tick={false} axisLine={false} />
-                                                    <Radar name={user?.username || 'Student'} dataKey="A" stroke="var(--color-primary)" strokeWidth={3} fill="var(--color-primary)" fillOpacity={0.4} />
+                                                    <PolarRadiusAxis angle={30} domain={[0, 100]} tick={false} axisLine={false} />
+                                                    <Radar name="Proficiency" dataKey="A" stroke="var(--color-primary)" strokeWidth={3} fill="var(--color-primary)" fillOpacity={0.4} />
                                                     <Tooltip contentStyle={{ backgroundColor: 'var(--color-surface)', borderRadius: '12px', border: '1px solid var(--color-border)', color: 'var(--color-text)' }} />
                                                 </RadarChart>
                                             </ResponsiveContainer>
@@ -784,9 +793,13 @@ const Dashboard = () => {
 
                                     {/* Progress Radial */}
                                     <div className="bg-brand-surface p-8 rounded-[2.5rem] shadow-premium border border-brand-border glimmer transition-all">
-                                        <h3 className="text-lg font-black text-brand-text mb-8 flex items-center gap-3 uppercase tracking-widest italic transition-colors">
-                                            <PieChart className="w-5 h-5 text-brand-primary" /> Sector Isolation
-                                        </h3>
+                                        <div className="flex items-center justify-between mb-8">
+                                            <div>
+                                                <h3 className="text-lg font-black text-brand-text uppercase tracking-widest italic transition-colors">Operational Progress</h3>
+                                                <p className="text-[10px] text-brand-muted font-black uppercase tracking-widest mt-1">// Sector isolation and completion status</p>
+                                            </div>
+                                            <PieChart className="w-5 h-5 text-brand-primary opacity-50" />
+                                        </div>
                                         <div className="h-80 flex items-center justify-center">
                                             <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                                                 <RadialBarChart innerRadius="25%" outerRadius="100%" barSize={15} data={progressData}>

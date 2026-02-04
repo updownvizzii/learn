@@ -106,7 +106,13 @@ const updateStreak = async (userId) => {
         const oneDayAgo = new Date(today);
         oneDayAgo.setDate(oneDayAgo.getDate() - 1);
 
-        if (!lastStreakDate || lastStreakDate.getTime() === today.getTime()) {
+        if (!lastStreakDate) {
+            // First time logging in ever
+            user.streak = 1;
+            user.lastStreakDate = today;
+            await user.save();
+            return { streak: 1, continued: true };
+        } else if (lastStreakDate.getTime() === today.getTime()) {
             // Already logged in today
             return { streak: user.streak, continued: false };
         } else if (lastStreakDate.getTime() === oneDayAgo.getTime()) {

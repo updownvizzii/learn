@@ -1,7 +1,31 @@
 const mongoose = require('mongoose');
 const Course = require('../models/Course');
 const User = require('../models/User');
-const { awardXP, unlockAchievement } = require('./gamificationController');
+const { awardXP, unlockAchievement, updateStreak } = require('./gamificationController');
+
+const calculateTotalDuration = (sections) => {
+    let totalSeconds = 0;
+    if (!sections || !Array.isArray(sections)) return '0H 0M';
+
+    sections.forEach(section => {
+        if (section.lectures && Array.isArray(section.lectures)) {
+            section.lectures.forEach(lecture => {
+                const duration = lecture.duration || '0:00';
+                const parts = duration.split(':').map(Number);
+                if (parts.length === 2) { // mm:ss
+                    totalSeconds += (isNaN(parts[0]) ? 0 : parts[0]) * 60 + (isNaN(parts[1]) ? 0 : parts[1]);
+                } else if (parts.length === 3) { // hh:mm:ss
+                    totalSeconds += (isNaN(parts[0]) ? 0 : parts[0]) * 3600 + (isNaN(parts[1]) ? 0 : parts[1]) * 60 + (isNaN(parts[2]) ? 0 : parts[2]);
+                }
+            });
+        }
+    });
+
+    const h = Math.floor(totalSeconds / 3600);
+    const m = Math.ceil((totalSeconds % 3600) / 60);
+
+    return `${h}H ${m}M`;
+};
 
 // @desc    Create a new course
 // @route   POST /api/courses
@@ -43,7 +67,8 @@ const createCourse = async (req, res) => {
             requirements: Array.isArray(requirements) ? requirements.filter(item => item.trim() !== '') : [],
             targetAudience: Array.isArray(targetAudience) ? targetAudience.filter(item => item.trim() !== '') : [],
             instructor: req.user._id,
-            status: 'Active'
+            status: 'Active',
+            duration: calculateTotalDuration(sections)
         };
 
         const course = await Course.create(courseData);
@@ -90,7 +115,13 @@ const getAllCourses = async (req, res) => {
             .populate('instructor', 'username email')
             .sort({ createdAt: -1 });
 
-        res.json(courses);
+        const formattedCourses = courses.map(course => {
+            const courseObj = course.toObject();
+            courseObj.duration = calculateTotalDuration(course.sections);
+            return courseObj;
+        });
+
+        res.json(formattedCourses);
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Server Error' });
@@ -104,7 +135,14 @@ const getTeacherCourses = async (req, res) => {
     try {
         const courses = await Course.find({ instructor: req.user._id })
             .sort({ createdAt: -1 });
-        res.json(courses);
+
+        const formattedCourses = courses.map(course => {
+            const courseObj = course.toObject();
+            courseObj.duration = calculateTotalDuration(course.sections);
+            return courseObj;
+        });
+
+        res.json(formattedCourses);
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Server Error' });
@@ -117,11 +155,13 @@ const getTeacherCourses = async (req, res) => {
 const getCourseById = async (req, res) => {
     try {
         const course = await Course.findById(req.params.id)
-            .populate('instructor', 'username email profilePicture bio expertise')
+            .populate('instructor', 'username email profilePicture bio expertise preloaderText preloaderImage')
             .populate('reviews.user', 'username profilePicture');
 
         if (course) {
-            res.json(course);
+            const courseObj = course.toObject();
+            courseObj.duration = calculateTotalDuration(course.sections);
+            res.json(courseObj);
         } else {
             res.status(404).json({ message: 'Course not found' });
         }
@@ -156,8 +196,11 @@ const getEnrolledCourses = async (req, res) => {
             const completedCount = enrollment.completedLectures ? enrollment.completedLectures.length : 0;
             const progress = totalLectures > 0 ? Math.round((completedCount / totalLectures) * 100) : 0;
 
+            const courseObj = course.toObject();
+            courseObj.duration = calculateTotalDuration(course.sections);
+
             return {
-                ...course.toObject(),
+                ...courseObj,
                 purchaseDate: enrollment.purchaseDate,
                 completedLectures: enrollment.completedLectures || [],
                 isCompleted: enrollment.isCompleted || false,
@@ -254,9 +297,19 @@ const markLectureCompleted = async (req, res) => {
 
         await user.save();
 
+        // Push to watch history for uptime tracking
+        user.watchHistory.push({
+            videoId: lectureId,
+            timestamp: new Date()
+        });
+        await user.save();
+
         // --- Gamification Logic ---
         // Award 50 XP for lecture completion
         const xpResult = await awardXP(user._id, 50, `Completed lecture in ${course.title}`);
+
+        // Update daily streak (only if they watch a video)
+        const streakResult = await updateStreak(user._id);
 
         // If course is completed, award 500 XP and check for achievements
         let courseXpResult = null;
@@ -283,7 +336,8 @@ const markLectureCompleted = async (req, res) => {
             gamification: {
                 lectureXP: xpResult,
                 courseXP: courseXpResult,
-                achievement: achievementResult
+                achievement: achievementResult,
+                streak: streakResult
             }
         });
     } catch (error) {
@@ -354,22 +408,47 @@ const getTeacherStats = async (req, res) => {
 
         const activeCourses = courses.filter(c => c.status === 'Active' || c.status === 'Published').length;
 
-        // Mock course performance data from real course titles
-        const coursePerformance = courses.map(c => ({
-            name: c.title.substring(0, 10) + '...',
-            students: c.students.length,
-            rating: c.rating || 0
-        })).sort((a, b) => b.students - a.students).slice(0, 5);
+        // Calculate real course performance (Enrollments and Earnings per course)
+        const coursePerformance = courses.map(c => {
+            const studentCount = students.filter(s =>
+                s.enrolledCourses.some(e => e.courseId.toString() === c._id.toString())
+            ).length;
+            return {
+                name: c.title.length > 15 ? c.title.substring(0, 12) + '...' : c.title,
+                students: studentCount,
+                revenue: studentCount * (c.price || 0),
+                rating: c.rating || 0
+            };
+        }).sort((a, b) => b.students - a.students).slice(0, 5);
 
-        // Mock monthly earnings (normally would aggregate from a transaction model)
-        const monthlyEarnings = [
-            { name: 'Jan', amount: Math.round(totalEarnings * 0.1) },
-            { name: 'Feb', amount: Math.round(totalEarnings * 0.15) },
-            { name: 'Mar', amount: Math.round(totalEarnings * 0.2) },
-            { name: 'Apr', amount: Math.round(totalEarnings * 0.15) },
-            { name: 'May', amount: Math.round(totalEarnings * 0.2) },
-            { name: 'Jun', amount: Math.round(totalEarnings * 0.2) }
-        ];
+        // Calculate real monthly earnings based on enrollment dates
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const monthlyDataMap = {};
+
+        // Initialize last 6 months
+        const today = new Date();
+        for (let i = 5; i >= 0; i--) {
+            const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+            monthlyDataMap[months[d.getMonth()]] = 0;
+        }
+
+        students.forEach(student => {
+            student.enrolledCourses.forEach(enroll => {
+                if (courseIds.some(id => id.toString() === enroll.courseId.toString())) {
+                    const course = courses.find(c => c._id.toString() === enroll.courseId.toString());
+                    const pDate = enroll.purchaseDate || enroll.enrolledAt || new Date(); // Fallback to current if missing
+                    const month = months[new Date(pDate).getMonth()];
+                    if (monthlyDataMap[month] !== undefined) {
+                        monthlyDataMap[month] += (course.price || 0);
+                    }
+                }
+            });
+        });
+
+        const monthlyEarningsReal = Object.keys(monthlyDataMap).map(name => ({
+            name,
+            amount: monthlyDataMap[name]
+        }));
 
         res.json({
             totalStudents: studentsEnrolled,
@@ -377,7 +456,7 @@ const getTeacherStats = async (req, res) => {
             activeCourses,
             coursePerformance,
             totalCourses: courses.length,
-            monthlyEarnings
+            monthlyEarnings: monthlyEarningsReal
         });
     } catch (error) {
         console.error(error);
@@ -427,44 +506,63 @@ const getStudentStats = async (req, res) => {
 
         const avgProgress = enrolledCount > 0 ? Math.round(totalProgress / enrolledCount) : 0;
 
-        // Mock activity data (normally would aggregate from a session/event log)
-        const activityData = [
-            { name: 'Mon', hours: 2 },
-            { name: 'Tue', hours: 4.5 },
-            { name: 'Wed', hours: 1.5 },
-            { name: 'Thu', hours: 5 },
-            { name: 'Fri', hours: 3 },
-            { name: 'Sat', hours: 6 },
-            { name: 'Sun', hours: 4 },
+        // --- REAL ACTIVITY DATA (Uptime Tracker) ---
+        const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const activityMap = { 'Mon': 0, 'Tue': 0, 'Wed': 0, 'Thu': 0, 'Fri': 0, 'Sat': 0, 'Sun': 0 };
+        const oneWeekAgo = new Date();
+        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+
+        if (user.watchHistory && user.watchHistory.length > 0) {
+            user.watchHistory.forEach(history => {
+                const date = new Date(history.timestamp);
+                if (date >= oneWeekAgo) {
+                    const dayName = days[date.getDay()];
+                    // Approx 15 mins (0.25 hrs) per video entry
+                    activityMap[dayName] = (activityMap[dayName] || 0) + 0.25;
+                }
+            });
+        }
+
+        const realActivityData = Object.keys(activityMap).map(name => ({
+            name,
+            hours: Number(activityMap[name].toFixed(2))
+        }));
+
+        // All-time hours calculation
+        const allTimeHours = (user.watchHistory?.length || 0) * 0.25;
+
+        // --- SKILL DOMINATION (Categories) ---
+        const categoryData = skillsData.length > 0 ? skillsData : [
+            { subject: 'Strategy', A: 80, fullMark: 100 },
+            { subject: 'Tactics', A: 70, fullMark: 100 },
+            { subject: 'Execution', A: 90, fullMark: 100 }
         ];
 
-        // Derived streak from lastActive
-        const lastActiveDate = new Date(user.lastActive || Date.now());
-        const today = new Date();
-        const diffDays = Math.floor((today - lastActiveDate) / (1000 * 60 * 60 * 24));
-        const streak = diffDays <= 1 ? 7 : (diffDays <= 3 ? 3 : 0);
+        // --- SECTOR ISOLATION (Progress) ---
+        const progressDistribution = [
+            { name: 'Completed', value: completedCount, fill: '#10b981' },
+            { name: 'In Progress', value: inProgressCount, fill: '#6366f1' },
+            { name: 'Not Started', value: notStartedCount, fill: '#f59e0b' },
+        ];
+
+        const streak = user.streak || 0;
+        const currentDayName = days[new Date().getDay()];
+        const dailyMinutes = Math.round((activityMap[currentDayName] || 0) * 60);
 
         res.json({
             enrolledCourses: enrolledCount,
             completedCourses: completedCount,
             avgProgress,
             certificatesEarned: completedCount,
-            hoursLearned: Math.round(totalProgress * 0.5 / 10), // Realistic hours
-            activityData,
-            skillsData: skillsData.length > 0 ? skillsData : [
-                { subject: 'Learning', A: 80, fullMark: 100 },
-                { subject: 'Focus', A: 70, fullMark: 100 },
-                { subject: 'Progress', A: 90, fullMark: 100 }
-            ],
-            progressDistribution: [
-                { name: 'Completed', value: completedCount, fill: '#10b981' },
-                { name: 'In Progress', value: inProgressCount, fill: '#6366f1' },
-                { name: 'Not Started', value: notStartedCount, fill: '#f59e0b' },
-            ],
+            hoursLearned: Number(allTimeHours.toFixed(1)),
+            weeklyHours: Number(realActivityData.reduce((acc, curr) => acc + curr.hours, 0).toFixed(1)),
+            activityData: realActivityData,
+            skillsData: categoryData,
+            progressDistribution,
             streak,
-            dailyGoalProgress: Math.min(100, (avgProgress % 30) + 40),
-            dailyMinutes: 32,
-            currentDay: Math.floor(Math.random() * 30) + 1
+            dailyMinutes,
+            currentDay: Math.floor((Date.now() - new Date(user.createdAt).getTime()) / (1000 * 60 * 60 * 24)) + 1,
+            dailyGoalProgress: Math.min(100, Math.round((dailyMinutes / 60) * 100)) // Goal: 60 mins
         });
     } catch (error) {
         console.error('Student Stats Error:', error);
@@ -546,6 +644,7 @@ const updateCourse = async (req, res) => {
             learningObjectives: Array.isArray(learningObjectives) ? learningObjectives.filter(item => item.trim() !== '') : course.learningObjectives,
             requirements: Array.isArray(requirements) ? requirements.filter(item => item.trim() !== '') : course.requirements,
             targetAudience: Array.isArray(targetAudience) ? targetAudience.filter(item => item.trim() !== '') : course.targetAudience,
+            duration: calculateTotalDuration(sections || course.sections)
         };
 
         const updatedCourse = await Course.findByIdAndUpdate(

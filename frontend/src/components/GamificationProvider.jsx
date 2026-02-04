@@ -101,6 +101,40 @@ const LevelUpPopup = ({ level, onClose }) => {
     );
 };
 
+const StreakPopup = ({ streak, onClose }) => {
+    useEffect(() => {
+        const timer = setTimeout(onClose, 4000);
+        return () => clearTimeout(timer);
+    }, [onClose]);
+
+    return (
+        <motion.div
+            initial={{ opacity: 0, x: 100 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 100 }}
+            className="fixed top-24 right-8 z-[9999] max-w-sm"
+        >
+            <div className="bg-gradient-to-br from-orange-500/20 to-red-500/20 backdrop-blur-xl border border-orange-500/30 rounded-[2rem] p-6 shadow-2xl relative overflow-hidden group">
+                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-150 transition-transform">
+                    <Flame className="w-16 h-16 text-orange-500" />
+                </div>
+                <div className="flex items-center gap-5 relative z-10">
+                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center shadow-lg shadow-orange-500/20">
+                        <Flame className="w-8 h-8 text-white animate-pulse" />
+                    </div>
+                    <div>
+                        <p className="text-orange-500 font-black text-[10px] uppercase tracking-[0.3em] mb-1">Elite Consistency</p>
+                        <h3 className="text-white font-black text-2xl uppercase italic italic tracking-tighter">
+                            {streak} DAY STREAK
+                        </h3>
+                        <p className="text-zinc-400 text-[10px] font-bold uppercase tracking-widest mt-1">Uplink Maintained</p>
+                    </div>
+                </div>
+            </div>
+        </motion.div>
+    );
+};
+
 const GamificationContext = React.createContext();
 
 export const useGamification = () => {
@@ -114,6 +148,7 @@ export const useGamification = () => {
 const GamificationProvider = ({ children }) => {
     const [showAchievement, setShowAchievement] = useState(null);
     const [showLevelUp, setShowLevelUp] = useState(null);
+    const [showStreak, setShowStreak] = useState(null);
 
     const unlockAchievement = (achievement) => {
         setShowAchievement(achievement);
@@ -121,6 +156,10 @@ const GamificationProvider = ({ children }) => {
 
     const triggerLevelUp = (level) => {
         setShowLevelUp(level);
+    };
+
+    const triggerStreak = (streak) => {
+        setShowStreak(streak);
     };
 
     const handleGamificationResult = (result) => {
@@ -133,10 +172,14 @@ const GamificationProvider = ({ children }) => {
         if (result.achievement && result.achievement.achievement) {
             unlockAchievement(result.achievement.achievement);
         }
+
+        if (result.streak && result.streak.continued) {
+            triggerStreak(result.streak.streak);
+        }
     };
 
     return (
-        <GamificationContext.Provider value={{ unlockAchievement, triggerLevelUp, handleGamificationResult }}>
+        <GamificationContext.Provider value={{ unlockAchievement, triggerLevelUp, triggerStreak, handleGamificationResult }}>
             {children}
             <AnimatePresence>
                 {showAchievement && (
@@ -149,6 +192,12 @@ const GamificationProvider = ({ children }) => {
                     <LevelUpPopup
                         level={showLevelUp}
                         onClose={() => setShowLevelUp(null)}
+                    />
+                )}
+                {showStreak && (
+                    <StreakPopup
+                        streak={showStreak}
+                        onClose={() => setShowStreak(null)}
                     />
                 )}
             </AnimatePresence>

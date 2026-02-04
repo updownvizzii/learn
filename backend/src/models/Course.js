@@ -11,7 +11,7 @@ const lectureSchema = new mongoose.Schema({
     },
     duration: {
         type: String,
-        default: '10:00' // Placeholder
+        default: '0:00' // Real duration calculation will override this
     },
     transcript: {
         type: String,

@@ -188,10 +188,10 @@ const Courses = () => {
 
                                             <div className="mt-auto flex items-center justify-between pt-6 border-t border-brand-border transition-colors">
                                                 <span className="text-2xl font-black text-brand-text italic transition-colors">
-                                                    {course.isFree ? (
-                                                        <span className="text-brand-primary">OPEN</span>
+                                                    {(!course.price || course.price === 0) ? (
+                                                        <span className="text-brand-primary uppercase">Free</span>
                                                     ) : (
-                                                        `${course.price} UNT`
+                                                        `₹${course.price}`
                                                     )}
                                                 </span>
                                                 <span className="text-brand-primary font-black text-[10px] uppercase tracking-widest flex items-center group-hover:gap-2 transition-all">

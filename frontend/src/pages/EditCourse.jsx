@@ -114,7 +114,7 @@ const EditCourse = () => {
                 if (s.id === sectionId || s._id === sectionId) {
                     return {
                         ...s,
-                        lectures: [...s.lectures, { id: Date.now().toString(), title: 'New Lecture', video: '' }]
+                        lectures: [...s.lectures, { id: Date.now().toString(), title: 'New Lecture', video: '', duration: '0:00' }]
                     };
                 }
                 return s;
@@ -249,12 +249,16 @@ const EditCourse = () => {
             video.preload = 'metadata';
             const timeout = setTimeout(() => {
                 console.warn('Duration extraction timed out for:', url);
-                resolve('10:00');
+                resolve('0:00');
             }, 5000);
 
             video.onloadedmetadata = () => {
                 clearTimeout(timeout);
                 const duration = video.duration;
+                if (!duration || isNaN(duration)) {
+                    resolve('0:00');
+                    return;
+                }
                 const minutes = Math.floor(duration / 60);
                 const seconds = Math.floor(duration % 60);
                 resolve(`${minutes}:${seconds.toString().padStart(2, '0')}`);
@@ -262,7 +266,7 @@ const EditCourse = () => {
             video.onerror = () => {
                 clearTimeout(timeout);
                 console.error('Video error during duration extraction');
-                resolve('10:00');
+                resolve('0:00');
             };
             video.src = url;
         });
@@ -271,7 +275,7 @@ const EditCourse = () => {
     const handleVideoUploadComplete = async (sectionId, lectureId, res) => {
         console.log('Video upload complete:', res);
         const videoUrl = res[0].ufsUrl || res[0].url;
-        let duration = '10:00';
+        let duration = '0:00';
         try {
             duration = await getVideoDuration(videoUrl);
         } catch (err) {
@@ -307,7 +311,7 @@ const EditCourse = () => {
             });
         });
         const hours = Math.floor(totalSeconds / 3600);
-        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const minutes = Math.ceil((totalSeconds % 3600) / 60);
         if (hours > 0) return `${hours}h ${minutes}m`;
         return `${minutes}m`;
     };

@@ -20,7 +20,12 @@ import {
     BookOpen,
     ArrowLeft,
     Loader2,
-    FileText
+    FileText,
+    Activity,
+    Shield,
+    MessageSquare,
+    Radio,
+    Download
 } from 'lucide-react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
@@ -31,6 +36,7 @@ const API_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'
 import { generateEnhancedCertificate } from '../components/CertificateGenerator';
 import { useAuth } from '../contexts/AuthContext';
 import { useGamification } from '../components/GamificationProvider';
+import CustomVideoPlayer from '../components/CustomVideoPlayer';
 
 const CourseDetail = () => {
     const { id } = useParams();
@@ -47,6 +53,13 @@ const CourseDetail = () => {
     const [isCourseCompleted, setIsCourseCompleted] = useState(false);
     const [currentLecture, setCurrentLecture] = useState(null);
     const [showCaptions, setShowCaptions] = useState(true);
+    const [showMissionStart, setShowMissionStart] = useState(false);
+    const [notes, setNotes] = useState('');
+    const [questions, setQuestions] = useState([
+        { id: 1, user: 'Ghost_Protocol', text: 'Does the AES-256 encryption handshake require a specific entropy seed?', replies: 2, timestamp: '2h ago' },
+        { id: 2, user: 'Cipher_Sovereign', text: 'Sector 4 deployment latency is spiking. Any advice on the neural uplink?', replies: 5, timestamp: '5h ago' }
+    ]);
+    const [newQuestion, setNewQuestion] = useState('');
 
     useEffect(() => {
         const fetchCourseData = async () => {
@@ -80,6 +93,23 @@ const CourseDetail = () => {
         };
         fetchCourseData();
     }, [id]);
+
+    const [courseVisitCount, setCourseVisitCount] = useState(0);
+
+    useEffect(() => {
+        if (!loading && course) {
+            const storedVisits = localStorage.getItem(`course_visits_${id}`);
+            const newCount = (storedVisits ? parseInt(storedVisits) : 0) + 1;
+            localStorage.setItem(`course_visits_${id}`, newCount.toString());
+            setCourseVisitCount(newCount);
+
+            setShowMissionStart(true);
+            const timer = setTimeout(() => {
+                setShowMissionStart(false);
+            }, 3000);
+            return () => clearTimeout(timer);
+        }
+    }, [loading, course, id]);
 
     const handleEnroll = async () => {
         if (isEnrolled) return;
@@ -129,10 +159,11 @@ const CourseDetail = () => {
 
                 // Handle Gamification Result
                 if (response.data.gamification) {
-                    const { lectureXP, courseXP, achievement } = response.data.gamification;
+                    const { lectureXP, courseXP, achievement, streak } = response.data.gamification;
                     if (lectureXP) handleGamificationResult(lectureXP);
                     if (courseXP) handleGamificationResult(courseXP);
                     if (achievement) handleGamificationResult({ achievement });
+                    if (streak) handleGamificationResult({ streak });
                 }
             }
         } catch (error) {
@@ -158,10 +189,24 @@ const CourseDetail = () => {
 
     if (loading) {
         return (
-            <div className="min-h-screen flex flex-col items-center justify-center bg-brand-bg transition-colors">
-                <Loader2 className="h-16 w-16 text-brand-primary animate-spin mb-8" />
-                <p className="text-brand-muted font-black uppercase tracking-[0.4em] text-[10px]">Syncing Intelligence...</p>
-            </div>
+            <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="min-h-screen flex flex-col items-center justify-center bg-[#050505] relative overflow-hidden"
+            >
+                {/* Tactical Background */}
+                <div className="absolute inset-0 opacity-10">
+                    <div className="absolute inset-0" style={{ backgroundImage: `radial-gradient(var(--color-primary) 0.5px, transparent 0.5px)`, backgroundSize: '40px 40px' }} />
+                </div>
+
+                <div className="relative z-10 flex flex-col items-center">
+                    <div className="w-32 h-32 rounded-full border-t-2 border-brand-primary animate-spin mb-10" />
+                    <h2 className="text-brand-primary font-black text-4xl uppercase italic tracking-tighter mb-4">
+                        Ready To Deploy...
+                    </h2>
+                    <p className="text-zinc-500 font-black text-xs uppercase tracking-[0.4em]">Establishing Mission Uplink</p>
+                </div>
+            </motion.div>
         );
     }
 
@@ -178,6 +223,46 @@ const CourseDetail = () => {
 
     return (
         <div className="min-h-screen bg-brand-bg font-jakarta text-brand-text relative overflow-hidden transition-colors">
+            {/* Mission Preloader (Course specific) */}
+            <AnimatePresence>
+                {showMissionStart && (
+                    <motion.div
+                        initial={{ opacity: 1 }}
+                        exit={{ opacity: 0, transition: { duration: 1 } }}
+                        className="fixed inset-0 z-[9999] bg-[#050505] flex flex-col items-center justify-center"
+                    >
+                        <motion.div
+                            initial={{ scale: 0.9, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            className="flex flex-col items-center text-center"
+                        >
+                            <div className="w-40 h-40 mb-12 relative">
+                                <motion.div
+                                    animate={{ rotate: 360 }}
+                                    transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
+                                    className="absolute inset-0 rounded-full border-2 border-dashed border-brand-primary/20"
+                                />
+                                <div className="absolute inset-4 rounded-full border border-brand-primary/30 flex items-center justify-center bg-brand-surface overflow-hidden">
+                                    {course.instructor?.preloaderImage ? (
+                                        <img src={course.instructor.preloaderImage} alt="Teacher" className="w-full h-full object-cover" />
+                                    ) : (
+                                        <Shield className="w-16 h-16 text-brand-primary" />
+                                    )}
+                                </div>
+                            </div>
+
+                            <h1 className="text-5xl font-black text-white italic uppercase tracking-tighter mb-4">
+                                {course.instructor?.preloaderText || (courseVisitCount <= 2 ? 'WELCOME' : 'WELCOME BACK')}
+                            </h1>
+                            <div className="flex items-center gap-4 text-brand-primary font-black text-[10px] uppercase tracking-[0.4em]">
+                                <Activity className="w-4 h-4 animate-pulse" />
+                                <span>{course.instructor?.preloaderText ? `SECTOR DEPLOYMENT: ${course.instructor?.preloaderText}` : 'Mission Authorization Confirmed'}</span>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             {/* Background Decor */}
             <div className="fixed inset-0 pointer-events-none z-0">
                 <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-brand-primary/5 dark:bg-blue-600/10 rounded-full blur-[150px]" />
@@ -229,18 +314,12 @@ const CourseDetail = () => {
                         <div className="aspect-video bg-brand-surface rounded-[2.5rem] border border-brand-border overflow-hidden shadow-premium dark:shadow-premium-dark relative group transition-all">
                             {currentLecture ? (
                                 <div className="w-full h-full relative">
-                                    <video
-                                        key={currentLecture.video}
-                                        src={currentLecture.video}
-                                        className="w-full h-full object-cover"
-                                        controls
-                                        autoPlay
+                                    <CustomVideoPlayer
+                                        src={currentLecture.video.startsWith('http') ? currentLecture.video : `${API_URL.replace('/api', '')}${currentLecture.video}`}
+                                        title={currentLecture.title}
+                                        transcript={currentLecture.transcript}
+                                        onComplete={() => toggleLectureCompletion(currentLecture._id)}
                                     />
-                                    <div className="absolute top-8 left-8">
-                                        <div className="px-5 py-2.5 bg-brand-primary/20 backdrop-blur-xl border border-brand-primary/30 rounded-2xl">
-                                            <p className="text-[10px] font-black text-brand-primary uppercase tracking-[0.2em] transition-colors">{currentLecture.title}</p>
-                                        </div>
-                                    </div>
                                 </div>
                             ) : (
                                 <div className="w-full h-full flex flex-col items-center justify-center space-y-6">
@@ -270,7 +349,7 @@ const CourseDetail = () => {
                         {/* Tabs */}
                         <div className="sticky top-24 bg-brand-bg/80 backdrop-blur-2xl z-20 pt-4 border-b border-brand-border mb-12 transition-colors">
                             <nav className="flex space-x-12">
-                                {['Overview', 'Curriculum', 'Instructor'].map((tab) => (
+                                {['Overview', 'Curriculum', 'Instructor', 'Mission Logs', 'Secure Intel', 'Resources'].map((tab) => (
                                     <button
                                         key={tab}
                                         onClick={() => setActiveTab(tab.toLowerCase())}
@@ -459,31 +538,99 @@ const CourseDetail = () => {
                                     </motion.div>
                                 )}
 
-                                {activeTab === 'instructor' && (
-                                    <motion.div key="instructor" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="bg-brand-surface rounded-[2.5rem] p-12 border border-brand-border shadow-2xl relative overflow-hidden transition-all">
-                                        <div className="flex flex-col md:flex-row items-center md:items-start gap-12">
-                                            <div className="relative">
-                                                <img
-                                                    src={course.instructor?.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${course.instructor?.username}`}
-                                                    alt={course.instructor?.username}
-                                                    className="w-40 h-40 rounded-3xl border border-brand-border shadow-2xl"
-                                                />
-                                                <div className="absolute -bottom-4 -right-4 w-12 h-12 bg-brand-primary rounded-2xl flex items-center justify-center border-4 border-brand-surface">
-                                                    <Award className="w-6 h-6 text-white" />
-                                                </div>
-                                            </div>
-                                            <div className="flex-1 space-y-6 text-center md:text-left">
+                                {activeTab === 'mission logs' && (
+                                    <motion.div key="notes" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-8">
+                                        <div className="bg-brand-surface rounded-[2.5rem] p-10 border border-brand-border shadow-2xl relative overflow-hidden">
+                                            <div className="flex items-center justify-between mb-8">
                                                 <div>
-                                                    <h3 className="text-3xl font-black text-brand-text uppercase italic tracking-tighter">{course.instructor?.username || 'Unknown Operator'}</h3>
-                                                    <p className="text-brand-primary font-black text-xs uppercase tracking-[0.2em] mt-2">{course.instructor?.expertise || 'Imperial Overseer'}</p>
+                                                    <h3 className="text-2xl font-black text-brand-text uppercase italic tracking-tighter">Tactical Mission Logs</h3>
+                                                    <p className="text-[10px] font-black text-brand-muted uppercase tracking-widest mt-2">// Recorded during active uplink</p>
                                                 </div>
-                                                <div className="flex flex-wrap justify-center md:justify-start gap-8 text-[10px] font-black uppercase tracking-widest text-brand-muted">
-                                                    <div className="flex items-center gap-2"><Star className="w-4 h-4 text-brand-primary fill-current" /> 4.9 Rank</div>
-                                                    <div className="flex items-center gap-2"><MessageCircle className="w-4 h-4 text-brand-primary" /> 15k Comms</div>
-                                                    <div className="flex items-center gap-2"><Users className="w-4 h-4 text-brand-primary" /> {(course.students?.length || 0).toLocaleString()} Nodes</div>
-                                                </div>
-                                                <p className="text-brand-muted font-medium leading-relaxed max-w-2xl">{course.instructor?.bio || 'Elite instructor dedicated to high-performance knowledge transfer across global sectors.'}</p>
+                                                <button
+                                                    onClick={() => alert('Mission logs synced to local storage.')}
+                                                    className="px-6 py-2.5 bg-brand-primary text-white text-[10px] font-black uppercase tracking-widest rounded-xl shadow-premium hover:bg-brand-primary/80 transition-all"
+                                                >
+                                                    Sync Logs
+                                                </button>
                                             </div>
+                                            <textarea
+                                                value={notes}
+                                                onChange={(e) => setNotes(e.target.value)}
+                                                placeholder="Enter mission observations here..."
+                                                className="w-full h-96 bg-brand-bg/50 border border-brand-border rounded-3xl p-8 text-brand-text font-bold shadow-inner focus:border-brand-primary/50 outline-none transition-all placeholder:text-brand-muted/20 resize-none"
+                                            />
+                                        </div>
+                                    </motion.div>
+                                )}
+
+                                {activeTab === 'secure intel' && (
+                                    <motion.div key="qa" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-8">
+                                        <div className="bg-brand-surface rounded-[2.5rem] p-10 border border-brand-border shadow-2xl relative overflow-hidden">
+                                            <h3 className="text-2xl font-black text-brand-text mb-8 uppercase italic tracking-tighter">Encrypted Domain Discussion</h3>
+
+                                            <div className="flex gap-6 mb-12">
+                                                <input
+                                                    value={newQuestion}
+                                                    onChange={(e) => setNewQuestion(e.target.value)}
+                                                    placeholder="Transmit new query to the sector..."
+                                                    className="flex-1 bg-brand-bg/50 border border-brand-border rounded-2xl px-8 py-4 text-brand-text font-bold focus:border-brand-primary/50 outline-none transition-all placeholder:text-brand-muted/20"
+                                                />
+                                                <button className="px-10 bg-brand-primary text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-premium transition-all">
+                                                    Transmit
+                                                </button>
+                                            </div>
+
+                                            <div className="space-y-6">
+                                                {questions.map((q) => (
+                                                    <div key={q.id} className="p-8 bg-brand-bg/30 border border-brand-border rounded-3xl hover:border-brand-primary/30 transition-all group">
+                                                        <div className="flex justify-between items-start mb-4">
+                                                            <div className="flex items-center gap-4">
+                                                                <div className="w-10 h-10 bg-brand-primary/10 rounded-xl border border-brand-primary/20 flex items-center justify-center text-brand-primary font-black text-xs">
+                                                                    {q.user[0]}
+                                                                </div>
+                                                                <div>
+                                                                    <p className="text-xs font-black text-brand-text uppercase tracking-tight">{q.user}</p>
+                                                                    <p className="text-[10px] font-black text-brand-muted uppercase tracking-widest">{q.timestamp}</p>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-center gap-2 text-brand-primary bg-brand-primary/10 px-3 py-1 rounded-lg">
+                                                                <MessageSquare className="w-3 h-3" />
+                                                                <span className="text-[10px] font-black">{q.replies} Replies</span>
+                                                            </div>
+                                                        </div>
+                                                        <p className="text-sm font-bold text-brand-muted leading-relaxed uppercase tracking-tight">
+                                                            {q.text}
+                                                        </p>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </motion.div>
+                                )}
+
+                                {activeTab === 'resources' && (
+                                    <motion.div key="resources" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-8">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                            {[
+                                                { title: 'Operational Manual.pdf', size: '2.4 MB', type: 'PDF' },
+                                                { title: 'Strategic Assets.zip', size: '156.0 MB', type: 'DATA' },
+                                                { title: 'Sector Blueprint.png', size: '12.1 MB', type: 'IMG' }
+                                            ].map((resource, i) => (
+                                                <div key={i} className="bg-brand-surface p-8 rounded-[2rem] border border-brand-border shadow-premium hover:border-brand-primary/40 transition-all group cursor-pointer">
+                                                    <div className="flex items-center gap-6">
+                                                        <div className="w-16 h-16 bg-brand-primary/10 rounded-2xl flex items-center justify-center text-brand-primary group-hover:bg-brand-primary group-hover:text-white transition-all">
+                                                            <FileText className="w-8 h-8" />
+                                                        </div>
+                                                        <div className="flex-1">
+                                                            <h4 className="font-black text-brand-text text-sm uppercase italic tracking-tighter mb-1">{resource.title}</h4>
+                                                            <p className="text-[10px] font-black text-brand-muted uppercase tracking-widest">{resource.size} • {resource.type}</p>
+                                                        </div>
+                                                        <button className="p-3 bg-brand-bg border border-brand-border rounded-xl text-brand-muted hover:text-brand-primary hover:border-brand-primary/50 transition-all">
+                                                            <Download className="w-5 h-5" />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))}
                                         </div>
                                     </motion.div>
                                 )}
@@ -508,30 +655,82 @@ const CourseDetail = () => {
                                     </div>
                                 </div>
 
-                                <div className="mb-10 text-center lg:text-left">
-                                    <p className="text-[10px] font-black text-brand-muted uppercase tracking-[0.3em] mb-3 text-center">Protocol Access Token</p>
-                                    <h4 className="text-5xl font-black text-brand-text italic tracking-tighter text-center">
-                                        {course.isFree ? <span className="text-brand-primary">OPEN</span> : `${course.price} UNT`}
+                                <div className="mb-10 text-center relative">
+                                    <div className="absolute -inset-4 bg-brand-primary/5 blur-2xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
+                                    <p className="text-[10px] font-black text-brand-muted uppercase tracking-[0.4em] mb-4 text-center">// Protocol Access Token</p>
+                                    <h4 className="text-6xl font-black text-brand-text italic tracking-tighter text-center flex items-center justify-center gap-4">
+                                        {(course.isFree || course.price === 0) ? (
+                                            <span className="text-brand-primary drop-shadow-[0_0_15px_var(--color-primary)]">OPEN_ACCESS</span>
+                                        ) : (
+                                            <>
+                                                <span className="text-zinc-500 text-2xl mt-2 italic">₹</span>
+                                                <span className="text-brand-text">{course.price}</span>
+                                                <span className="text-brand-primary text-xl mt-3 italic tracking-widest opacity-40">UNT</span>
+                                            </>
+                                        )}
                                     </h4>
+                                    <div className="mt-4 flex justify-center gap-2">
+                                        <div className="w-1 h-1 rounded-full bg-brand-primary/30" />
+                                        <div className="w-12 h-1 bg-brand-primary/10 rounded-full overflow-hidden">
+                                            <motion.div
+                                                animate={{ x: ['-100%', '100%'] }}
+                                                transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                                                className="w-full h-full bg-brand-primary/40"
+                                            />
+                                        </div>
+                                        <div className="w-1 h-1 rounded-full bg-brand-primary/30" />
+                                    </div>
                                 </div>
 
                                 <motion.button
-                                    whileHover={{ scale: 1.02 }}
+                                    whileHover={{ scale: 1.02, y: -2 }}
                                     whileTap={{ scale: 0.98 }}
                                     onClick={handleEnroll}
                                     disabled={isEnrolling || isEnrolled}
-                                    className={`w-full py-6 rounded-[1.5rem] font-black text-[11px] uppercase tracking-[0.3em] transition-all shadow-[0_0_40px_rgba(37,99,235,0.2)] mb-6 flex items-center justify-center gap-4 ${isEnrolled ? 'bg-zinc-900 text-zinc-500 border border-[#1F1F1F]' : 'bg-blue-600 text-white hover:bg-blue-500 shadow-[0_10px_40px_-10px_rgba(37,99,235,0.5)]'}`}
+                                    className={`
+                                        w-full py-7 rounded-[1.8rem] font-black text-[11px] uppercase tracking-[0.4em] transition-all relative overflow-hidden group/btn
+                                        ${isEnrolled
+                                            ? 'bg-brand-surface border border-brand-primary/20 text-brand-primary/60 shadow-inner'
+                                            : 'bg-brand-primary text-white shadow-premium hover:shadow-[0_0_40px_rgba(13,148,136,0.4)]'}
+                                    `}
                                 >
-                                    {isEnrolling ? <Loader2 className="w-5 h-5 animate-spin" /> : isEnrolled ? <><CheckCircle className="w-5 h-5" /> ENROLLED</> : `INITIATE SYNC`}
+                                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover/btn:translate-x-full transition-transform duration-1000" />
+                                    <div className="flex items-center justify-center gap-4 relative z-10">
+                                        {isEnrolling ? (
+                                            <Loader2 className="w-5 h-5 animate-spin" />
+                                        ) : isEnrolled ? (
+                                            <><Shield className="w-5 h-5" /> Clearance Active</>
+                                        ) : (
+                                            <><Radio className="w-5 h-5 animate-pulse" /> Initiate Sync</>
+                                        )}
+                                    </div>
                                 </motion.button>
+
+                                {isEnrolled && (
+                                    <div className="mt-6 p-6 rounded-2xl bg-brand-bg/40 border border-brand-border flex items-center justify-between">
+                                        <div>
+                                            <p className="text-[8px] font-black text-brand-muted uppercase tracking-widest mb-1">Grid Connectivity</p>
+                                            <p className="text-[10px] font-black text-emerald-500 uppercase flex items-center gap-2">
+                                                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                                                Active Uplink
+                                            </p>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="text-[8px] font-black text-brand-muted uppercase tracking-widest mb-1">Latency</p>
+                                            <p className="text-[10px] font-black text-white uppercase italic">14ms</p>
+                                        </div>
+                                    </div>
+                                )}
 
                                 {isCourseCompleted && (
                                     <motion.button
-                                        whileHover={{ y: -5 }}
+                                        whileHover={{ y: -5, scale: 1.02 }}
                                         onClick={downloadCertificate}
-                                        className="w-full py-6 bg-gradient-to-r from-blue-600 to-cyan-500 text-white rounded-[1.5rem] font-black text-[11px] uppercase tracking-[0.3em] shadow-[0_15px_40px_-10px_rgba(37,99,235,0.5)] flex items-center justify-center gap-4 mb-8"
+                                        className="w-full mt-8 py-7 bg-gradient-to-br from-brand-primary via-emerald-500 to-brand-secondary text-white rounded-[1.8rem] font-black text-[11px] uppercase tracking-[0.4em] shadow-premium flex items-center justify-center gap-4 group/cert"
                                     >
-                                        <Award className="w-5 h-5" /> DOWNLOAD CREDS
+                                        <div className="absolute inset-0 bg-white/10 opacity-0 group-hover/cert:opacity-100 transition-opacity" />
+                                        <Award className="w-5 h-5 group-hover:scale-125 transition-transform" />
+                                        <span>Download Credentials</span>
                                     </motion.button>
                                 )}
 

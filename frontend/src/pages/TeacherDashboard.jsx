@@ -22,7 +22,8 @@ import {
     Shield,
     Activity,
     Cpu,
-    Radio
+    Radio,
+    Monitor
 } from 'lucide-react';
 import {
     AreaChart,
@@ -453,24 +454,35 @@ const TeacherDashboard = () => {
                                     <Star className="w-4 h-4 mr-1 fill-current" /> {course.rating || '0.0'}
                                 </div>
                             </div>
-                            <h3 className="font-black text-brand-text text-xl mb-3 line-clamp-2 italic transition-colors">{course.title}</h3>
-                            <div className="flex items-center justify-between mt-6">
-                                <span className="font-black text-2xl text-brand-primary">₹{(course.price || 0) * (course.students ? course.students.length : 0)}</span>
-                                <div className="flex items-center gap-2">
-                                    <button
-                                        onClick={() => navigate(`/teacher/edit-course/${course._id}`)}
-                                        className="text-brand-muted hover:text-brand-primary p-3 rounded-xl hover:bg-brand-bg transition-all"
-                                        title="Modify Asset"
-                                    >
-                                        <Settings className="w-5 h-5" />
-                                    </button>
-                                    <button
-                                        onClick={() => handleDecommission(course._id)}
-                                        className="text-brand-muted hover:text-red-500 p-3 rounded-xl hover:bg-red-500/10 transition-all"
-                                        title="Decommission Sector"
-                                    >
-                                        <Trash2 className="w-5 h-5" />
-                                    </button>
+                            <h3 className="font-black text-brand-text text-xl mb-1 line-clamp-2 italic transition-colors">{course.title}</h3>
+                            <div className="mb-4">
+                                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-muted">
+                                    PRICE: {(!course.price || course.price === 0) ? <span className="text-brand-primary">FREE</span> : `₹${course.price}`}
+                                </span>
+                            </div>
+                            <div className="flex flex-col mt-6 pt-6 border-t border-brand-border/50">
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-[10px] font-black text-brand-muted uppercase tracking-widest">Asset Value (Price)</span>
+                                    <span className="font-black text-2xl text-brand-primary italic">₹{course.price || 0}</span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <span className="text-[9px] font-black text-brand-muted/40 uppercase tracking-widest italic">// Mission Yield: ₹{(course.price || 0) * (course.students ? course.students.length : 0)} Total</span>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            onClick={() => navigate(`/teacher/edit-course/${course._id}`)}
+                                            className="text-brand-muted hover:text-brand-primary p-3 rounded-xl hover:bg-brand-bg transition-all"
+                                            title="Modify Asset"
+                                        >
+                                            <Settings className="w-5 h-5" />
+                                        </button>
+                                        <button
+                                            onClick={() => handleDecommission(course._id)}
+                                            className="text-brand-muted hover:text-red-500 p-3 rounded-xl hover:bg-red-500/10 transition-all"
+                                            title="Decommission Sector"
+                                        >
+                                            <Trash2 className="w-5 h-5" />
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -484,32 +496,67 @@ const TeacherDashboard = () => {
         <div className="space-y-8">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <div className="bg-brand-surface p-8 rounded-[2.5rem] border border-brand-border shadow-premium glimmer transition-all">
-                    <h3 className="text-xl font-black text-brand-text mb-6 uppercase tracking-tight italic transition-colors">Unit Acquisition Trajectory</h3>
+                    <div className="flex items-center justify-between mb-8">
+                        <div>
+                            <h3 className="text-xl font-black text-brand-text uppercase tracking-tight italic transition-colors">Student Growth Trajectory</h3>
+                            <p className="text-[10px] text-brand-muted font-black uppercase tracking-widest mt-1">// Real-time enrollment velocity</p>
+                        </div>
+                        <Users className="w-5 h-5 text-brand-primary opacity-50" />
+                    </div>
                     <div className="h-80">
                         <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-                            <LineChart data={revenueData}>
+                            <AreaChart data={statsData.monthlyEarnings}>
+                                <defs>
+                                    <linearGradient id="colorStudents" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="var(--color-primary)" stopOpacity={0.3} />
+                                        <stop offset="95%" stopColor="var(--color-primary)" stopOpacity={0} />
+                                    </linearGradient>
+                                </defs>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border)" />
                                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: 'var(--color-muted)', fontSize: 10, fontWeight: 800 }} />
                                 <YAxis axisLine={false} tickLine={false} tick={{ fill: 'var(--color-muted)', fontSize: 10, fontWeight: 800 }} />
                                 <Tooltip contentStyle={{ backgroundColor: 'var(--color-surface)', borderRadius: '16px', border: '1px solid var(--color-border)', color: 'var(--color-text)' }} />
-                                <Line type="monotone" dataKey="students" stroke="var(--color-primary)" strokeWidth={5} dot={{ r: 4, strokeWidth: 0, fill: 'var(--color-primary)' }} activeDot={{ r: 8 }} />
-                            </LineChart>
+                                <Area type="monotone" dataKey="amount" stroke="var(--color-primary)" strokeWidth={4} fillOpacity={1} fill="url(#colorStudents)" />
+                            </AreaChart>
                         </ResponsiveContainer>
                     </div>
                 </div>
+
                 <div className="bg-brand-surface p-8 rounded-[2.5rem] border border-brand-border shadow-premium glimmer transition-all">
-                    <h3 className="text-xl font-black text-brand-text mb-6 uppercase tracking-tight italic transition-colors">System Access Points</h3>
-                    <div className="h-80 flex items-center justify-center">
-                        <div className="text-center text-brand-muted">
-                            <BarChart2 className="w-16 h-16 mx-auto mb-4 opacity-20" />
-                            <p className="font-bold text-sm uppercase tracking-widest">Detailed system access analytics coming soon.</p>
+                    <div className="flex items-center justify-between mb-8">
+                        <div>
+                            <h3 className="text-xl font-black text-brand-text uppercase tracking-tight italic transition-colors">Sector Revenue Breakdown</h3>
+                            <p className="text-[10px] text-brand-muted font-black uppercase tracking-widest mt-1">// Capital yield per department</p>
                         </div>
+                        <BarChart2 className="w-5 h-5 text-brand-primary opacity-50" />
+                    </div>
+                    <div className="h-80">
+                        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                            <BarChart data={statsData.coursePerformance} layout="vertical">
+                                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--color-border)" />
+                                <XAxis type="number" hide />
+                                <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fill: 'var(--color-muted)', fontSize: 10, fontWeight: 800 }} width={80} />
+                                <Tooltip cursor={{ fill: 'var(--color-primary)', opacity: 0.05 }} contentStyle={{ backgroundColor: 'var(--color-surface)', borderRadius: '12px', border: '1px solid var(--color-border)' }} />
+                                <Bar dataKey="revenue" fill="var(--color-primary)" radius={[0, 6, 6, 0]} barSize={20} />
+                            </BarChart>
+                        </ResponsiveContainer>
                     </div>
                 </div>
             </div>
 
             <div className="bg-brand-surface p-8 rounded-[2.5rem] border border-brand-border shadow-premium glimmer transition-all">
-                <h3 className="text-xl font-black text-brand-text mb-6 uppercase tracking-tight italic transition-colors">Capital Flow Overview</h3>
+                <div className="flex items-center justify-between mb-8">
+                    <div>
+                        <h3 className="text-xl font-black text-brand-text uppercase tracking-tight italic transition-colors">Aggregate Capital Velocity</h3>
+                        <p className="text-[10px] text-brand-muted font-black uppercase tracking-widest mt-1">// Monthly revenue performance archive</p>
+                    </div>
+                    <div className="flex gap-4">
+                        <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded-full bg-brand-primary shadow-[0_0_8px_var(--color-primary)]" />
+                            <span className="text-[9px] font-black text-brand-muted uppercase tracking-widest">Revenue Flow</span>
+                        </div>
+                    </div>
+                </div>
                 <div className="h-96">
                     <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                         <BarChart data={statsData.monthlyEarnings}>
@@ -630,6 +677,36 @@ const TeacherDashboard = () => {
                             onChange={(e) => setProfile(prev => ({ ...prev, bio: e.target.value }))}
                             className="w-full px-6 py-3.5 rounded-xl border border-brand-border bg-brand-bg focus:border-brand-primary/50 outline-none text-brand-text placeholder:text-brand-muted/40 transition-all"
                         ></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <div className="bg-brand-surface p-8 rounded-[2.5rem] border border-brand-border shadow-premium glimmer transition-all">
+                <h3 className="text-xl font-black text-brand-text mb-8 flex items-center gap-3 uppercase tracking-tight italic transition-colors">
+                    <Monitor className="w-6 h-6 text-brand-primary" /> Imperial Branding
+                </h3>
+                <div className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label className="block text-xs font-black text-brand-muted uppercase tracking-widest mb-2">Custom Preloader Text</label>
+                            <input
+                                type="text"
+                                placeholder="e.g., INITIALIZING COMMAND CENTER..."
+                                value={profile.preloaderText || ''}
+                                onChange={(e) => setProfile(prev => ({ ...prev, preloaderText: e.target.value }))}
+                                className="w-full px-6 py-3 bg-brand-bg border border-brand-border rounded-xl outline-none focus:border-brand-primary/50 text-brand-text text-sm font-bold transition-all"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-black text-brand-muted uppercase tracking-widest mb-2">Custom Branding Image (URL)</label>
+                            <input
+                                type="text"
+                                placeholder="https://your-logo.com/image.png"
+                                value={profile.preloaderImage || ''}
+                                onChange={(e) => setProfile(prev => ({ ...prev, preloaderImage: e.target.value }))}
+                                className="w-full px-6 py-3 bg-brand-bg border border-brand-border rounded-xl outline-none focus:border-brand-primary/50 text-brand-text text-sm font-bold transition-all"
+                            />
+                        </div>
                     </div>
                 </div>
             </div>
