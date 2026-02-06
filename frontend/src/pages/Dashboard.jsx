@@ -811,21 +811,77 @@ const Dashboard = () => {
                                         </div>
                                     </div>
 
-                                    {/* Grades Bar Chart */}
-                                    <div className="bg-brand-surface p-8 rounded-[2.5rem] shadow-premium border border-brand-border glimmer transition-all">
-                                        <h3 className="text-lg font-black text-brand-text mb-8 flex items-center gap-3 uppercase tracking-widest italic transition-colors">
-                                            <Award className="w-5 h-5 text-brand-primary" /> Performance Index
-                                        </h3>
-                                        <div className="h-80">
-                                            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-                                                <BarChart data={skillsData}>
-                                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border)" />
-                                                    <XAxis dataKey="subject" axisLine={false} tickLine={false} tick={{ fill: 'var(--color-muted)', fontSize: 10, fontWeight: 800 }} />
-                                                    <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }} />
-                                                    <Bar dataKey="A" fill="var(--color-primary)" radius={[6, 6, 0, 0]} barSize={40} />
-                                                </BarChart>
-                                            </ResponsiveContainer>
+                                    {/* Human-Centric Intelligence Section */}
+                                    <div className="lg:col-span-2 bg-brand-bg/50 p-8 rounded-[2.5rem] border border-brand-border shadow-premium relative overflow-hidden group">
+                                        <div className="flex items-center justify-between mb-10">
+                                            <div>
+                                                <h3 className="text-xl font-black text-brand-text uppercase tracking-tight italic transition-colors">Cognitive Performance Bio-Data</h3>
+                                                <p className="text-[10px] text-brand-muted font-black uppercase tracking-widest mt-1">// Psychological and Behavioral Analysis</p>
+                                            </div>
+                                            <Zap className="w-6 h-6 text-brand-primary animate-pulse" />
                                         </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                                            {/* Weekly Momentum */}
+                                            <div className="space-y-4">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-[10px] font-black text-brand-muted uppercase tracking-widest">Weekly Momentum</span>
+                                                    <span className={`text-xs font-black ${fullStats?.weeklyMomentum >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                                                        {fullStats?.weeklyMomentum >= 0 ? '+' : ''}{fullStats?.weeklyMomentum || 0}%
+                                                    </span>
+                                                </div>
+                                                <div className="h-24 bg-brand-surface rounded-3xl border border-brand-border flex items-center justify-center p-6 transition-all group-hover:border-brand-primary/30">
+                                                    <div className="text-center">
+                                                        <p className="text-2xl font-black text-brand-text">{(fullStats?.weeklyHours || 0).toFixed(1)}h</p>
+                                                        <p className="text-[8px] font-black text-brand-muted uppercase tracking-widest">Active Velocity</p>
+                                                    </div>
+                                                </div>
+                                                <p className="text-[9px] text-brand-muted font-bold leading-relaxed">
+                                                    Momentum measures the acceleration of your learning effort compared to last week.
+                                                </p>
+                                            </div>
+
+                                            {/* Consistency Ratio */}
+                                            <div className="space-y-4">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-[10px] font-black text-brand-muted uppercase tracking-widest">Consistency Ratio</span>
+                                                    <span className="text-xs font-black text-brand-primary">
+                                                        {fullStats?.consistencyRatio || 0}%
+                                                    </span>
+                                                </div>
+                                                <div className="h-24 bg-brand-surface rounded-3xl border border-brand-border flex items-center justify-center p-6 transition-all group-hover:border-brand-primary/30">
+                                                    <div className="text-center">
+                                                        <p className="text-2xl font-black text-brand-text">{fullStats?.consistencyRatio || 0}%</p>
+                                                        <p className="text-[8px] font-black text-brand-muted uppercase tracking-widest">Reliability Index</p>
+                                                    </div>
+                                                </div>
+                                                <p className="text-[9px] text-brand-muted font-bold leading-relaxed">
+                                                    The ratio of active learning days to total days since your deployment on the grid.
+                                                </p>
+                                            </div>
+
+                                            {/* Resilience Score */}
+                                            <div className="space-y-4">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-[10px] font-black text-brand-muted uppercase tracking-widest">Resilience Score</span>
+                                                    <span className="text-xs font-black text-cyan-500">
+                                                        {fullStats?.recoveryScore || 0}/100
+                                                    </span>
+                                                </div>
+                                                <div className="h-24 bg-brand-surface rounded-3xl border border-brand-border flex items-center justify-center p-6 transition-all group-hover:border-brand-primary/30">
+                                                    <div className="text-center">
+                                                        <p className="text-2xl font-black text-brand-text">{fullStats?.recoveryScore || 0}</p>
+                                                        <p className="text-[8px] font-black text-brand-muted uppercase tracking-widest">Recovery Factor</p>
+                                                    </div>
+                                                </div>
+                                                <p className="text-[9px] text-brand-muted font-bold leading-relaxed">
+                                                    Measures how quickly you return to training after a break. High scores indicate high grit.
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        {/* Background Decoration */}
+                                        <div className="absolute top-[-20%] right-[-10%] w-64 h-64 bg-brand-primary/5 rounded-full blur-[80px] pointer-events-none" />
                                     </div>
 
                                 </div>

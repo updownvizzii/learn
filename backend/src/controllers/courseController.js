@@ -506,18 +506,56 @@ const getStudentStats = async (req, res) => {
 
         const avgProgress = enrolledCount > 0 ? Math.round(totalProgress / enrolledCount) : 0;
 
+        // --- HUMAN-CENTRIC METRICS (Advanced Analytics) ---
+        const now = new Date();
+        const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+
+        let currentWeekUptime = 0;
+        let previousWeekUptime = 0;
+        const activeDaysSet = new Set();
+
+        if (user.watchHistory && user.watchHistory.length > 0) {
+            user.watchHistory.forEach(history => {
+                const hDate = new Date(history.timestamp);
+                // Track for momentum
+                if (hDate >= oneWeekAgo) {
+                    currentWeekUptime += 0.25;
+                } else if (hDate >= twoWeeksAgo) {
+                    previousWeekUptime += 0.25;
+                }
+                // Track unique days for consistency ratio
+                activeDaysSet.add(hDate.toDateString());
+            });
+        }
+
+        // 1. Weekly Momentum Score (Percentage change)
+        const weeklyMomentum = previousWeekUptime === 0
+            ? (currentWeekUptime > 0 ? 100 : 0)
+            : Math.round(((currentWeekUptime - previousWeekUptime) / previousWeekUptime) * 100);
+
+        // 2. Consistency Ratio (Active Days / Total Days since joining)
+        const joinDate = new Date(user.createdAt);
+        const totalDaysSinceJoining = Math.max(1, Math.ceil((now - joinDate) / (1000 * 60 * 60 * 24)));
+        const activeDaysCount = activeDaysSet.size;
+        const consistencyRatio = Math.min(100, Math.round((activeDaysCount / totalDaysSinceJoining) * 100));
+
+        // 3. Recovery Rate (Days since last activity - inverse score)
+        const lastActiveDate = user.watchHistory && user.watchHistory.length > 0
+            ? new Date(user.watchHistory[user.watchHistory.length - 1].timestamp)
+            : joinDate;
+        const daysSinceLastActivity = Math.floor((now - lastActiveDate) / (1000 * 60 * 60 * 24));
+        const recoveryScore = Math.max(0, 100 - (daysSinceLastActivity * 10)); // Loses 10 points every day idle
+
         // --- REAL ACTIVITY DATA (Uptime Tracker) ---
         const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
         const activityMap = { 'Mon': 0, 'Tue': 0, 'Wed': 0, 'Thu': 0, 'Fri': 0, 'Sat': 0, 'Sun': 0 };
-        const oneWeekAgo = new Date();
-        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
 
         if (user.watchHistory && user.watchHistory.length > 0) {
             user.watchHistory.forEach(history => {
                 const date = new Date(history.timestamp);
                 if (date >= oneWeekAgo) {
                     const dayName = days[date.getDay()];
-                    // Approx 15 mins (0.25 hrs) per video entry
                     activityMap[dayName] = (activityMap[dayName] || 0) + 0.25;
                 }
             });
@@ -555,14 +593,18 @@ const getStudentStats = async (req, res) => {
             avgProgress,
             certificatesEarned: completedCount,
             hoursLearned: Number(allTimeHours.toFixed(1)),
-            weeklyHours: Number(realActivityData.reduce((acc, curr) => acc + curr.hours, 0).toFixed(1)),
+            weeklyHours: Number(currentWeekUptime.toFixed(1)),
             activityData: realActivityData,
             skillsData: categoryData,
             progressDistribution,
             streak,
             dailyMinutes,
-            currentDay: Math.floor((Date.now() - new Date(user.createdAt).getTime()) / (1000 * 60 * 60 * 24)) + 1,
-            dailyGoalProgress: Math.min(100, Math.round((dailyMinutes / 60) * 100)) // Goal: 60 mins
+            currentDay: totalDaysSinceJoining,
+            dailyGoalProgress: Math.min(100, Math.round((dailyMinutes / 60) * 100)), // Goal: 60 mins
+            // Advanced Human-Centric Metrics
+            weeklyMomentum,
+            consistencyRatio,
+            recoveryScore
         });
     } catch (error) {
         console.error('Student Stats Error:', error);
